@@ -13,12 +13,16 @@ import logging
 import sys
 
 # ── 配置 ──────────────────────────────────────────────
-API_BASE   = "http://YOUR_DB_HOST:8787"
-API_KEY    = "8ea235c73b763162a61155c3c20146336d3dd46a464356d9"
-COMFY_URL  = "http://127.0.0.1:8188"
-POLL_EVERY = 5    # 没任务时的等待秒数
-IMG_W      = 768
-IMG_H      = 512
+API_BASE    = "https://noda-pics.onrender.com"   # Render 部署后的 URL，上线后更新
+API_KEY     = "8ea235c73b763162a61155c3c20146336d3dd46a464356d9"
+COMFY_URL   = "http://127.0.0.1:8188"
+POLL_EVERY  = 5    # 没任务时的等待秒数（同时 keep-alive Render 服务）
+IMG_W       = 768
+IMG_H       = 512
+# 图片直传 223
+IMG_SERVER  = "root@YOUR_DB_HOST"
+IMG_DIR_223 = "/var/www/noda-pics/images"
+IMG_BASE    = "https://img.noda.pics"            # 223 nginx 图片 CDN 域名
 # ──────────────────────────────────────────────────────
 
 logging.basicConfig(
@@ -44,18 +48,33 @@ def api_get(path: str) -> dict:
     return json.loads(resp.read())
 
 
-def api_put_image(path: str, img_bytes: bytes) -> dict:
+def api_put_url(path: str, image_url: str) -> dict:
+    """告诉 Render API 图片已存好，给出 URL"""
+    payload = json.dumps({"image_url": image_url}).encode()
     req = urllib.request.Request(
         f"{API_BASE}{path}",
-        data=img_bytes,
+        data=payload,
         method="PUT",
         headers={
             "Authorization": f"Bearer {API_KEY}",
-            "Content-Type": "image/png",
+            "Content-Type": "application/json",
         }
     )
-    resp = urllib.request.urlopen(req, timeout=30)
+    resp = urllib.request.urlopen(req, timeout=15)
     return json.loads(resp.read())
+
+
+def scp_to_223(local_path: str, filename: str) -> str:
+    """把图片 SCP 到 223，返回公开 URL"""
+    import subprocess
+    remote = f"{IMG_SERVER}:{IMG_DIR_223}/{filename}"
+    result = subprocess.run(
+        ["scp", local_path, remote],
+        capture_output=True, timeout=30
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"SCP 失败: {result.stderr.decode()}")
+    return f"{IMG_BASE}/{filename}"
 
 
 def api_report_error(job_id: str, msg: str):
@@ -155,16 +174,32 @@ def process_job(job: dict):
     prompt = job["prompt"]
     log.info(f"▶ job {job_id[:8]}  prompt: {prompt[:80]}")
 
+    import tempfile, os
+    tmp_file = None
     try:
         img_bytes = comfy_generate(prompt)
 
-        log.info(f"  上传结果到 223...")
-        result = api_put_image(f"/api/jobs/{job_id}/result", img_bytes)
-        log.info(f"  ✓ {result.get('image_url', '')}")
+        # 存到本地临时文件
+        filename = f"{job_id}.png"
+        tmp_file = os.path.join(tempfile.gettempdir(), filename)
+        with open(tmp_file, "wb") as f:
+            f.write(img_bytes)
+
+        # SCP 到 223
+        log.info(f"  SCP 图片到 223...")
+        image_url = scp_to_223(tmp_file, filename)
+
+        # 通知 Render API
+        log.info(f"  通知 API: {image_url}")
+        api_put_url(f"/api/jobs/{job_id}/result", image_url)
+        log.info(f"  ✓ done")
 
     except Exception as e:
         log.error(f"  ✗ 失败: {e}")
         api_report_error(job_id, str(e))
+    finally:
+        if tmp_file and os.path.exists(tmp_file):
+            os.remove(tmp_file)
 
 
 # ── 入口 ──────────────────────────────────────────────

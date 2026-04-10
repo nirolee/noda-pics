@@ -7,7 +7,7 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import redis
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="../frontend", static_url_path="")
 
 # ─── CORS：允许 noda.pics 和本地调试 ───
 CORS(app, resources={r"/api/*": {"origins": [
@@ -171,26 +171,16 @@ def next_job():
 @app.put("/api/jobs/<job_id>/result")
 @require_api_key
 def upload_result(job_id: str):
-    """本地 poller 上传生成结果（二进制图片）"""
+    """本地 poller 上报结果 URL（图片已由 poller 直接存到 223）"""
     job = get_job(job_id)
     if not job:
         return jsonify({"error": "not_found"}), 404
 
-    # 接受图片文件 or 直接 body 二进制
-    if request.files.get("image"):
-        img_data = request.files["image"].read()
-    else:
-        img_data = request.data
+    body = request.get_json(silent=True) or {}
+    image_url = body.get("image_url", "").strip()
+    if not image_url:
+        return jsonify({"error": "missing image_url"}), 400
 
-    if not img_data:
-        return jsonify({"error": "no_image_data"}), 400
-
-    filename = f"{job_id}.png"
-    filepath = os.path.join(IMAGE_DIR, filename)
-    with open(filepath, "wb") as f:
-        f.write(img_data)
-
-    image_url = f"{IMAGE_BASE}/{filename}"
     job["status"]    = "done"
     job["done_at"]   = str(int(time.time()))
     job["image_url"] = image_url
@@ -217,6 +207,12 @@ def upload_error(job_id: str):
     # rdb.lpush("jobs:queue", job_id)
 
     return jsonify({"ok": True}), 200
+
+
+# ─── 前端 ───
+@app.get("/")
+def index():
+    return app.send_static_file("index.html")
 
 
 # ─── 健康检查 ───
