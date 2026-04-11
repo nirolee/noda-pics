@@ -1465,17 +1465,17 @@ function openUserMenu() {
 }
 
 async function refreshUser() {
-  if (!authToken) { updateNavUser(null, null); loadStats(); return; }
   try {
+    const headers = {};
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
     const [meRes, statsRes] = await Promise.all([
-      fetch('/api/auth/me', { headers: { Authorization: `Bearer ${authToken}` } }),
-      fetch('/api/stats',   { headers: { Authorization: `Bearer ${authToken}` } }),
+      fetch('/api/auth/me', { headers, credentials: 'include' }),
+      fetch('/api/stats',   { headers, credentials: 'include' }),
     ]);
     const me    = await meRes.json();
     const stats = await statsRes.json();
 
     if (!me.user) {
-      // Token invalid/expired
       authToken = null;
       localStorage.removeItem('token');
       updateNavUser(null, stats.quota);
@@ -1483,7 +1483,6 @@ async function refreshUser() {
       updateNavUser(me.user, stats.quota);
     }
 
-    // Update queue text
     document.getElementById('queueTxt').textContent =
       lang === 'zh' ? `队列 ${stats.queue_len}/${stats.queue_max}` : `Queue ${stats.queue_len}/${stats.queue_max}`;
   } catch { /* ignore */ }
@@ -1492,18 +1491,11 @@ async function refreshUser() {
 // ── Init ─────────────────────────────────────────────
 applyLang();
 
-// Handle OAuth redirect (?login=ok sets cookie, just refresh user)
+// 清除 OAuth 跳转参数，统一走 refreshUser（支持 cookie + localStorage）
 if (new URLSearchParams(location.search).get('login') === 'ok') {
   history.replaceState({}, '', '/');
-  // Token comes via HttpOnly cookie — fetch /me to confirm
-  fetch('/api/auth/me', { credentials: 'include' })
-    .then(r => r.json())
-    .then(d => {
-      if (d.user) updateNavUser(d.user, null);
-    });
-} else {
-  refreshUser();
 }
+refreshUser();
 
 loadStats();
 setInterval(loadStats, 30000);
