@@ -134,6 +134,111 @@ body::before {
 }
 .quota-badge.warn { color: var(--accent2); border-color: rgba(247,124,106,0.3); }
 
+/* ── Pro badge ── */
+.pro-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #fff;
+  background: linear-gradient(135deg, #f7a76a, var(--accent2));
+  border-radius: 4px;
+  padding: 2px 6px;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+/* ── Upgrade Modal ── */
+.upgrade-modal {
+  background: #13151f;
+  border: 1px solid var(--border-h);
+  border-radius: 20px;
+  padding: 40px 36px;
+  width: 100%;
+  max-width: 440px;
+  position: relative;
+  transform: translateY(16px);
+  transition: transform 0.25s;
+  text-align: center;
+}
+.modal-backdrop.open .upgrade-modal { transform: none; }
+
+.upgrade-icon {
+  font-size: 40px;
+  margin-bottom: 16px;
+}
+.upgrade-title {
+  font-family: var(--font-head);
+  font-size: 26px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+.upgrade-title span {
+  background: linear-gradient(135deg, #f7a76a, var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.upgrade-sub {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 28px;
+  line-height: 1.6;
+}
+.upgrade-price {
+  font-family: var(--font-head);
+  font-size: 48px;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.upgrade-price-sub {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 28px;
+}
+.upgrade-features {
+  list-style: none;
+  text-align: left;
+  margin-bottom: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.upgrade-features li {
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.upgrade-features li::before {
+  content: '✓';
+  color: var(--green);
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.btn-upgrade {
+  width: 100%;
+  padding: 15px;
+  background: linear-gradient(135deg, #f7a76a, var(--accent2));
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-family: var(--font-head);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 12px;
+}
+.btn-upgrade:hover { opacity: 0.9; transform: translateY(-1px); }
+.upgrade-login-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+.upgrade-login-hint a { color: var(--accent); cursor: pointer; }
+
 /* ── Auth Modal ── */
 .modal-backdrop {
   position: fixed; inset: 0;
@@ -786,6 +891,8 @@ textarea:focus {
     <div id="navUser" style="display:none;align-items:center;gap:8px">
       <img class="nav-avatar" id="navAvatar" src="" alt="" onclick="openUserMenu()">
       <span class="nav-user-name" id="navUserName" onclick="openUserMenu()"></span>
+      <span class="pro-badge" id="navProBadge" style="display:none">PRO</span>
+      <button class="nav-auth" id="navUpgradeBtn" onclick="openUpgrade()" style="display:none;font-size:12px;padding:4px 10px">升级 Pro</button>
     </div>
     <button class="nav-auth" id="navAuthBtn" onclick="openModal('login')" data-i18n="btnLogin">登录 / 注册</button>
     <button class="nav-lang" id="langBtn">EN</button>
@@ -863,6 +970,27 @@ textarea:focus {
         <span data-i18n="hasAccount">已有账号？</span>
         <a onclick="openModal('login')" data-i18n="toLogin">去登录</a>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Upgrade Modal -->
+<div class="modal-backdrop" id="upgradeModal">
+  <div class="upgrade-modal">
+    <button class="modal-close" onclick="closeUpgrade()">×</button>
+    <div class="upgrade-icon">⚡</div>
+    <div class="upgrade-title">升级到 <span>Pro</span></div>
+    <div class="upgrade-sub" id="upgradeSubText">解锁更多生成次数，尽情创作</div>
+    <div class="upgrade-price">$3<span style="font-size:20px;color:var(--muted)">/月</span></div>
+    <div class="upgrade-price-sub">随时取消，无隐藏费用</div>
+    <ul class="upgrade-features">
+      <li>每天 100 张生成额度（免费版 10 张）</li>
+      <li>优先进入生成队列</li>
+      <li>支持所有风格</li>
+    </ul>
+    <button class="btn-upgrade" id="btnUpgrade" onclick="doCheckout()">立即升级 — $3/月</button>
+    <div class="upgrade-login-hint" id="upgradeLoginHint" style="display:none">
+      需要先 <a onclick="closeUpgrade();openModal('login')">登录</a> 才能升级
     </div>
   </div>
 </div>
@@ -1245,7 +1373,7 @@ async function generate() {
       body: JSON.stringify({ prompt: fullPrompt, style: selectedStyle }),
     });
 
-    if (r.status === 429) { const d = await r.json(); reset(); showToast(d.message || t('errRate')); return; }
+    if (r.status === 429) { reset(); openUpgrade('quota'); return; }
     if (r.status === 503) { reset(); showToast(t('errQueue')); return; }
     if (!r.ok) throw new Error(await r.text());
 
@@ -1335,6 +1463,61 @@ function showToast(msg) {
   el.textContent = msg;
   el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+// ── Upgrade ──────────────────────────────────────────
+function openUpgrade(reason) {
+  const sub = document.getElementById('upgradeSubText');
+  const hint = document.getElementById('upgradeLoginHint');
+  const btn  = document.getElementById('btnUpgrade');
+  if (reason === 'quota') {
+    sub.textContent = lang === 'zh'
+      ? '今日免费次数已用完，升级 Pro 获得 100 次/天'
+      : 'Daily free quota used up. Upgrade for 100/day.';
+  } else {
+    sub.textContent = lang === 'zh' ? '解锁更多生成次数，尽情创作' : 'Unlock more generations.';
+  }
+  if (!authToken) {
+    btn.style.display  = 'none';
+    hint.style.display = '';
+  } else {
+    btn.style.display  = '';
+    hint.style.display = 'none';
+  }
+  document.getElementById('upgradeModal').classList.add('open');
+}
+
+function closeUpgrade() {
+  document.getElementById('upgradeModal').classList.remove('open');
+}
+
+document.getElementById('upgradeModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('upgradeModal')) closeUpgrade();
+});
+
+async function doCheckout() {
+  const btn = document.getElementById('btnUpgrade');
+  btn.disabled = true;
+  btn.textContent = lang === 'zh' ? '跳转中…' : 'Redirecting…';
+  try {
+    const r = await fetch('/api/payment/checkout', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` },
+      credentials: 'include',
+    });
+    const d = await r.json();
+    if (d.checkout_url) {
+      window.location.href = d.checkout_url;
+    } else {
+      showToast('支付跳转失败，请稍后再试');
+      btn.disabled = false;
+      btn.textContent = lang === 'zh' ? '立即升级 — $3/月' : 'Upgrade — $3/mo';
+    }
+  } catch {
+    showToast('网络错误');
+    btn.disabled = false;
+    btn.textContent = lang === 'zh' ? '立即升级 — $3/月' : 'Upgrade — $3/mo';
+  }
 }
 
 // ── Auth ─────────────────────────────────────────────
@@ -1437,6 +1620,10 @@ function updateNavUser(user, quota) {
     navAvatar.src = user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email)}&background=7c6af7&color=fff&size=60`;
     navName.textContent = user.name || user.email.split('@')[0];
 
+    const isPro = user.plan === 'pro' && user.plan_active;
+    document.getElementById('navProBadge').style.display    = isPro ? '' : 'none';
+    document.getElementById('navUpgradeBtn').style.display  = isPro ? 'none' : '';
+
     if (quota) {
       const warn = quota.used >= quota.limit * 0.8;
       badge.textContent = t('quotaFmt', { used: quota.used, limit: quota.limit });
@@ -1491,9 +1678,13 @@ async function refreshUser() {
 // ── Init ─────────────────────────────────────────────
 applyLang();
 
-// 清除 OAuth 跳转参数，统一走 refreshUser（支持 cookie + localStorage）
-if (new URLSearchParams(location.search).get('login') === 'ok') {
+// 清除跳转参数，统一走 refreshUser
+const _params = new URLSearchParams(location.search);
+if (_params.get('login') === 'ok' || _params.get('payment') === 'success') {
   history.replaceState({}, '', '/');
+  if (_params.get('payment') === 'success') {
+    showToast(lang === 'zh' ? '🎉 升级成功！欢迎加入 Pro' : '🎉 Welcome to Pro!');
+  }
 }
 refreshUser();
 

@@ -2,6 +2,8 @@ import os
 import uuid
 import time
 import json
+import hmac
+import hashlib
 import bcrypt
 import jwt
 import requests
@@ -29,8 +31,9 @@ DB_NAME     = os.getenv("DB_NAME",     "noda_pics")
 JWT_SECRET  = os.getenv("JWT_SECRET",  "noda-jwt-secret-change-me")
 JWT_EXPIRE  = int(os.getenv("JWT_EXPIRE", str(60 * 24 * 30)))  # 30天（分钟）
 
-RATE_GUEST  = int(os.getenv("RATE_GUEST",  "3"))   # 游客每天限额
-RATE_USER   = int(os.getenv("RATE_USER",   "10"))  # 注册用户每天限额
+RATE_GUEST  = int(os.getenv("RATE_GUEST",  "3"))    # 游客每天限额
+RATE_USER   = int(os.getenv("RATE_USER",   "10"))   # 免费用户每天限额
+RATE_PRO    = int(os.getenv("RATE_PRO",    "100"))  # Pro 用户每天限额
 QUEUE_MAX   = int(os.getenv("QUEUE_MAX",   "20"))
 
 GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID",     "")
@@ -38,6 +41,12 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 GITHUB_CLIENT_ID     = os.getenv("GITHUB_CLIENT_ID",     "")
 GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")
 OAUTH_REDIRECT_BASE  = os.getenv("OAUTH_REDIRECT_BASE",  "https://noda-pics.onrender.com")
+
+CREEM_API_KEY     = os.getenv("CREEM_API_KEY",      "")
+CREEM_WEBHOOK_SEC = os.getenv("CREEM_WEBHOOK_SECRET","")
+CREEM_PRODUCT_PRO = os.getenv("CREEM_PRODUCT_PRO",  "")
+CREEM_TEST_MODE   = os.getenv("CREEM_TEST_MODE",     "true").lower() == "true"
+CREEM_BASE        = "https://test-api.creem.io" if CREEM_TEST_MODE else "https://api.creem.io"
 
 
 def get_db():
@@ -97,12 +106,23 @@ def require_auth(f):
 
 
 # ─── 限流（游客按IP/用户按user_id，每天重置）───
+def is_pro_active(user: dict) -> bool:
+    if user["plan"] != "pro":
+        return False
+    exp = user.get("plan_expires_at")
+    if exp is None:
+        return True  # 没有过期时间视为永久（手动赠送）
+    if isinstance(exp, str):
+        exp = datetime.fromisoformat(exp)
+    return exp > datetime.now()
+
+
 def check_quota(ip: str, user: dict | None) -> tuple[bool, int, int]:
     """返回 (allowed, used, limit)"""
     with get_db() as db:
         with db.cursor() as cur:
             if user:
-                limit = RATE_USER if user["plan"] == "free" else 9999
+                limit = RATE_PRO if is_pro_active(user) else RATE_USER
                 cur.execute(
                     "SELECT COUNT(*) AS cnt FROM jobs WHERE user_id = %s "
                     "AND created_at >= CURDATE()",
@@ -188,11 +208,13 @@ def me():
     if not user:
         return jsonify({"user": None})
     return jsonify({"user": {
-        "id":         user["id"],
-        "email":      user["email"],
-        "name":       user["name"],
-        "avatar_url": user["avatar_url"],
-        "plan":       user["plan"],
+        "id":             user["id"],
+        "email":          user["email"],
+        "name":           user["name"],
+        "avatar_url":     user["avatar_url"],
+        "plan":           user["plan"],
+        "plan_active":    is_pro_active(user) if user["plan"] == "pro" else False,
+        "plan_expires_at": str(user["plan_expires_at"]) if user.get("plan_expires_at") else None,
     }})
 
 
@@ -415,6 +437,87 @@ def health():
         return jsonify({"ok": True, "db": "ok"})
     except Exception as e:
         return jsonify({"ok": False, "db": str(e)}), 500
+
+
+# ═══════════════════════════════════════════
+# 支付接口（Creem）
+# ═══════════════════════════════════════════
+
+@app.post("/api/payment/checkout")
+@require_auth
+def create_checkout():
+    if not CREEM_API_KEY or not CREEM_PRODUCT_PRO:
+        return jsonify({"error": "payment_not_configured"}), 503
+    user = request.user
+    r = requests.post(
+        f"{CREEM_BASE}/v1/checkouts",
+        headers={"x-api-key": CREEM_API_KEY, "Content-Type": "application/json"},
+        json={
+            "product_id":  CREEM_PRODUCT_PRO,
+            "success_url": f"{OAUTH_REDIRECT_BASE}/api/payment/success",
+            "customer":    {"email": user["email"]},
+            "metadata":    {"user_id": user["id"]},
+        },
+        timeout=15,
+    )
+    if not r.ok:
+        return jsonify({"error": "checkout_failed", "detail": r.text}), 500
+    return jsonify({"checkout_url": r.json().get("checkout_url")})
+
+
+@app.get("/api/payment/success")
+def payment_success():
+    """Creem 付款成功后跳转到此，再跳回首页"""
+    return redirect("/?payment=success")
+
+
+@app.post("/api/payment/webhook")
+def payment_webhook():
+    payload = request.get_data()
+    sig     = request.headers.get("x-creem-signature", "")
+
+    if CREEM_WEBHOOK_SEC:
+        expected = hmac.new(CREEM_WEBHOOK_SEC.encode(), payload, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected):
+            return jsonify({"error": "invalid_signature"}), 401
+
+    event      = request.get_json(silent=True) or {}
+    event_type = event.get("type", "")
+    data       = event.get("data", {})
+
+    if event_type == "checkout.completed":
+        meta    = data.get("metadata") or {}
+        user_id = meta.get("user_id")
+        sub_id  = data.get("subscription_id", "")
+        cust_id = data.get("customer_id", "")
+        if user_id:
+            expires_at = datetime.now() + timedelta(days=31)
+            with get_db() as db:
+                with db.cursor() as cur:
+                    cur.execute(
+                        "UPDATE users SET plan='pro', plan_expires_at=%s, "
+                        "creem_subscription_id=%s, creem_customer_id=%s WHERE id=%s",
+                        (expires_at, sub_id, cust_id, user_id)
+                    )
+
+    elif event_type == "subscription.renewed":
+        sub_id = data.get("subscription_id") or data.get("id", "")
+        if sub_id:
+            expires_at = datetime.now() + timedelta(days=31)
+            with get_db() as db:
+                with db.cursor() as cur:
+                    cur.execute(
+                        "UPDATE users SET plan_expires_at=%s WHERE creem_subscription_id=%s",
+                        (expires_at, sub_id)
+                    )
+
+    elif event_type == "subscription.cancelled":
+        sub_id = data.get("subscription_id") or data.get("id", "")
+        if sub_id:
+            # 不立即降级，等 plan_expires_at 自然到期
+            pass
+
+    return jsonify({"status": "ok"})
 
 
 if __name__ == "__main__":
