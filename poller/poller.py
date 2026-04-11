@@ -1,32 +1,41 @@
 #!/usr/bin/env python3
 """
 noda.pics 本地 Poller
-直连 223 MySQL → 取 pending 任务 → ComfyUI 生图 → SCP 到 223 → 更新 DB
+直连 223 MySQL → 取 pending 任务 → ComfyUI 生图 → 上传 R2 → 更新 DB
 """
 import time
 import json
 import uuid
-import subprocess
 import logging
 import sys
 import os
 import tempfile
 import urllib.request
 
+try:
+    import boto3
+except ImportError:
+    print("请先安装 boto3: pip install boto3")
+    sys.exit(1)
+
 # ── 配置 ──────────────────────────────────────────────
 DB_HOST     = "YOUR_DB_HOST"
 DB_PORT     = 3306
 DB_USER     = "noda_pics"
 DB_PASS     = "REDACTED_DB_PASS"
+
+# Cloudflare R2
+R2_ENDPOINT    = "https://543abdc2576d9ccf0b4a5e9f41ed501f.r2.cloudflarestorage.com"
+R2_ACCESS_KEY  = "REDACTED_R2_ACCESS_KEY"
+R2_SECRET_KEY  = "REDACTED_R2_SECRET_KEY"
+R2_BUCKET      = "noda-pics"
+IMG_BASE       = "https://img.noda.pics"
 DB_NAME     = "noda_pics"
 
 COMFY_URL   = "http://127.0.0.1:8188"
 POLL_EVERY  = 5      # 没任务时等待秒数
 IMG_W       = 768
 IMG_H       = 512
-IMG_SERVER  = "root@YOUR_DB_HOST"
-IMG_DIR_223 = "/var/www/noda-pics/images"
-IMG_BASE    = "https://img.noda.pics"
 # ──────────────────────────────────────────────────────
 
 logging.basicConfig(
@@ -174,11 +183,16 @@ def comfy_generate(prompt_text: str) -> bytes:
     raise TimeoutError("ComfyUI 超时（5分钟）")
 
 
-def scp_to_223(local_path: str, filename: str) -> str:
-    remote = f"{IMG_SERVER}:{IMG_DIR_223}/{filename}"
-    result = subprocess.run(["scp", local_path, remote], capture_output=True, timeout=30)
-    if result.returncode != 0:
-        raise RuntimeError(f"SCP 失败: {result.stderr.decode()}")
+def upload_to_r2(local_path: str, filename: str) -> str:
+    import boto3
+    s3 = boto3.client(
+        "s3",
+        endpoint_url=R2_ENDPOINT,
+        aws_access_key_id=R2_ACCESS_KEY,
+        aws_secret_access_key=R2_SECRET_KEY,
+        region_name="auto",
+    )
+    s3.upload_file(local_path, R2_BUCKET, filename, ExtraArgs={"ContentType": "image/png"})
     return f"{IMG_BASE}/{filename}"
 
 
@@ -198,8 +212,8 @@ def process_job(job: dict):
         with open(tmp_file, "wb") as f:
             f.write(img_bytes)
 
-        log.info("  SCP 图片到 223...")
-        image_url = scp_to_223(tmp_file, filename)
+        log.info("  上传到 R2...")
+        image_url = upload_to_r2(tmp_file, filename)
 
         mark_done(job_id, image_url)
         log.info(f"  ✓ done → {image_url}")
