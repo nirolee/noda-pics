@@ -32,10 +32,12 @@ R2_BUCKET      = "noda-pics"
 IMG_BASE       = "https://img.noda.pics"
 DB_NAME     = "noda_pics"
 
-COMFY_URL   = "http://127.0.0.1:8188"
-POLL_EVERY  = 5      # 没任务时等待秒数
-IMG_W       = 768
-IMG_H       = 512
+COMFY_URL      = "http://127.0.0.1:8188"
+POLL_EVERY     = 5      # 没任务时等待秒数
+IMG_W          = 768
+IMG_H          = 512
+IMAGE_TTL_HOURS = 48   # 图片保留时长（小时）
+CLEANUP_EVERY  = 3600  # 每小时清理一次（秒）
 # ──────────────────────────────────────────────────────
 
 logging.basicConfig(
@@ -117,6 +119,53 @@ def mark_failed(job_id: str, error: str):
             )
     finally:
         db.close()
+
+
+# ── R2 清理 ───────────────────────────────────────────
+
+def cleanup_expired_images():
+    """删除超过 IMAGE_TTL_HOURS 小时的 R2 图片，DB 中 image_url 置空"""
+    db = get_db()
+    try:
+        with db.cursor() as cur:
+            cur.execute(
+                "SELECT id, image_url FROM jobs "
+                "WHERE status = 'done' AND image_url IS NOT NULL "
+                "AND done_at < NOW() - INTERVAL %s HOUR",
+                (IMAGE_TTL_HOURS,)
+            )
+            expired = cur.fetchall()
+    finally:
+        db.close()
+
+    if not expired:
+        return
+
+    s3 = boto3.client(
+        "s3",
+        endpoint_url=R2_ENDPOINT,
+        aws_access_key_id=R2_ACCESS_KEY,
+        aws_secret_access_key=R2_SECRET_KEY,
+        region_name="auto",
+    )
+
+    deleted = 0
+    for row in expired:
+        filename = row["image_url"].split("/")[-1]
+        try:
+            s3.delete_object(Bucket=R2_BUCKET, Key=filename)
+            db = get_db()
+            with db.cursor() as cur:
+                cur.execute(
+                    "UPDATE jobs SET image_url = NULL WHERE id = %s",
+                    (row["id"],)
+                )
+            db.close()
+            deleted += 1
+        except Exception as e:
+            log.warning(f"  清理失败 {filename}: {e}")
+
+    log.info(f"🗑  清理完成，删除 {deleted}/{len(expired)} 张过期图片")
 
 
 # ── ComfyUI ───────────────────────────────────────────
@@ -236,8 +285,15 @@ def main():
     log.info(f"  间隔  : {POLL_EVERY}s")
     log.info("=" * 48)
 
+    last_cleanup = 0
+
     while True:
         try:
+            # 每小时清理一次过期图片
+            if time.time() - last_cleanup > CLEANUP_EVERY:
+                cleanup_expired_images()
+                last_cleanup = time.time()
+
             job = fetch_next_job()
             if job:
                 process_job(job)

@@ -1,33 +1,31 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NODA.PICS — AI Image Synthesis</title>
+<title>NODA.PICS — AI 图像生成</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Syne:wght@700;800&family=Space+Mono:ital@0;1&display=swap" rel="stylesheet">
 <style>
-:root {
-  --bg:        #06070d;
-  --bg2:       #0d0f1a;
-  --panel:     rgba(10, 15, 35, 0.85);
-  --border:    rgba(0, 229, 255, 0.18);
-  --cyan:      #00e5ff;
-  --cyan-dim:  rgba(0, 229, 255, 0.5);
-  --amber:     #ffaa00;
-  --red:       #ff3b3b;
-  --green:     #00ff9d;
-  --text:      #c8d8e8;
-  --text-dim:  rgba(200, 216, 232, 0.45);
-  --glow:      0 0 20px rgba(0, 229, 255, 0.25), 0 0 60px rgba(0, 229, 255, 0.08);
-  --font-mono: 'Share Tech Mono', monospace;
-  --font-ui:   'Space Mono', monospace;
-  --font-head: 'Orbitron', monospace;
-}
-
+/* ── Reset & Base ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
 html { scroll-behavior: smooth; }
+
+:root {
+  --bg:       #080910;
+  --surface:  #0f111a;
+  --border:   rgba(255,255,255,0.07);
+  --border-h: rgba(255,255,255,0.15);
+  --text:     #e2e4ec;
+  --muted:    rgba(226,228,236,0.4);
+  --accent:   #7c6af7;
+  --accent2:  #f77c6a;
+  --green:    #6af7b8;
+  --glow:     rgba(124,106,247,0.35);
+  --font-ui:  'Inter', sans-serif;
+  --font-head:'Syne', sans-serif;
+  --font-mono:'Space Mono', monospace;
+}
 
 body {
   background: var(--bg);
@@ -35,200 +33,306 @@ body {
   font-family: var(--font-ui);
   min-height: 100vh;
   overflow-x: hidden;
-  position: relative;
 }
 
-/* ── Grid background ── */
+/* ── Noise texture overlay ── */
 body::before {
   content: '';
   position: fixed; inset: 0;
-  background-image:
-    linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
-  background-size: 40px 40px;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
   pointer-events: none;
   z-index: 0;
+  opacity: 0.6;
 }
 
-/* ── CRT scanlines ── */
-body::after {
-  content: '';
-  position: fixed; inset: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(0,0,0,0.08) 2px,
-    rgba(0,0,0,0.08) 4px
-  );
-  pointer-events: none;
-  z-index: 9999;
-  animation: scanroll 12s linear infinite;
-}
-
-@keyframes scanroll {
-  from { background-position: 0 0; }
-  to   { background-position: 0 40px; }
-}
-
-/* ── Vignette ── */
-.vignette {
-  position: fixed; inset: 0;
-  background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.75) 100%);
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* ── Layout ── */
-.page {
-  position: relative; z-index: 2;
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 48px 20px 80px;
+/* ── NAV ── */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0;
+  z-index: 100;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 32px;
-}
-
-/* ── Header ── */
-.header { text-align: center; }
-
-.logo {
-  font-family: var(--font-head);
-  font-weight: 900;
-  font-size: clamp(36px, 8vw, 64px);
-  letter-spacing: 0.12em;
-  color: var(--cyan);
-  text-shadow:
-    0 0 10px var(--cyan),
-    0 0 30px rgba(0,229,255,0.4),
-    0 0 80px rgba(0,229,255,0.15);
-  position: relative;
-  display: inline-block;
-}
-
-.logo::after {
-  content: attr(data-text);
-  position: absolute; inset: 0;
-  color: var(--cyan);
-  animation: glitch 6s infinite;
-  clip-path: polygon(0 25%, 100% 25%, 100% 35%, 0 35%);
-  opacity: 0;
-}
-
-@keyframes glitch {
-  0%, 93%, 100% { opacity: 0; transform: none; }
-  94% { opacity: 0.8; transform: translate(-3px, 0); filter: hue-rotate(90deg); }
-  96% { opacity: 0.8; transform: translate(3px, 0); }
-  98% { opacity: 0; }
-}
-
-.tagline {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.35em;
-  color: var(--text-dim);
-  margin-top: 8px;
-  text-transform: uppercase;
-}
-
-.tagline span {
-  color: var(--amber);
-  animation: blink 1.2s step-end infinite;
-}
-@keyframes blink { 50% { opacity: 0; } }
-
-/* ── Status bar ── */
-.statusbar {
-  width: 100%;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-dim);
-  display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  background: var(--panel);
-  backdrop-filter: blur(8px);
-  border-radius: 3px;
+  padding: 18px 40px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(8,9,16,0.8);
+  backdrop-filter: blur(20px);
 }
 
-.statusbar .dot {
+.nav-logo {
+  font-family: var(--font-head);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--text);
+  text-decoration: none;
+}
+.nav-logo span { color: var(--accent); }
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nav-lang {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.nav-lang:hover { color: var(--text); border-color: var(--border-h); }
+
+.nav-queue {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.nav-queue .dot {
   display: inline-block;
-  width: 6px; height: 6px;
+  width: 5px; height: 5px;
   border-radius: 50%;
   background: var(--green);
   box-shadow: 0 0 6px var(--green);
-  margin-right: 6px;
+  margin-right: 5px;
   animation: pulse 2s ease-in-out infinite;
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+/* ── HERO ── */
+.hero {
+  position: relative;
+  padding: 160px 40px 80px;
+  text-align: center;
+  z-index: 1;
 }
 
-/* ── Main panel ── */
-.panel {
-  width: 100%;
-  background: var(--panel);
+.hero-glow {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -60%);
+  width: 600px; height: 600px;
+  background: radial-gradient(ellipse, rgba(124,106,247,0.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid rgba(124,106,247,0.3);
+  border-radius: 100px;
+  padding: 6px 16px;
+  margin-bottom: 28px;
+}
+.hero-tag::before {
+  content: '';
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.hero h1 {
+  font-family: var(--font-head);
+  font-size: clamp(48px, 8vw, 88px);
+  font-weight: 800;
+  line-height: 1.0;
+  letter-spacing: -0.02em;
+  margin-bottom: 20px;
+}
+
+.hero h1 .line2 {
+  display: block;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-sub {
+  font-size: 17px;
+  color: var(--muted);
+  max-width: 460px;
+  margin: 0 auto 40px;
+  line-height: 1.7;
+}
+
+/* ── EXAMPLE GALLERY ── */
+.gallery-section {
+  position: relative;
+  z-index: 1;
+  padding: 0 40px 80px;
+}
+
+.gallery-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.gallery-scroll {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 16px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  cursor: grab;
+}
+.gallery-scroll::-webkit-scrollbar { display: none; }
+.gallery-scroll:active { cursor: grabbing; }
+
+.gallery-card {
+  flex: 0 0 260px;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 28px;
-  backdrop-filter: blur(12px);
-  box-shadow: var(--glow);
+  background: var(--surface);
+  cursor: pointer;
+  transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.gallery-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(124,106,247,0.4);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(124,106,247,0.2);
+}
+
+.gallery-img {
+  width: 100%;
+  aspect-ratio: 3/4;
+  object-fit: cover;
+  display: block;
+  background: linear-gradient(135deg, #1a1b2e 0%, #0f0f1a 100%);
+}
+
+/* placeholder gradient for images not yet loaded */
+.gallery-img[data-placeholder] {
+  background: var(--gradient);
+}
+
+.gallery-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, transparent 40%, rgba(8,9,16,0.95) 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 16px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.gallery-card:hover .gallery-overlay { opacity: 1; }
+
+.gallery-prompt {
+  font-size: 11px;
+  color: var(--text);
+  line-height: 1.5;
+  margin-bottom: 10px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.gallery-use {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.gallery-style-tag {
+  position: absolute;
+  top: 12px; left: 12px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: rgba(8,9,16,0.75);
+  border: 1px solid var(--border-h);
+  border-radius: 4px;
+  padding: 3px 8px;
+  color: var(--muted);
+  backdrop-filter: blur(4px);
+}
+
+/* ── MAIN PANEL ── */
+.main {
+  position: relative; z-index: 1;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 0 24px 120px;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px;
   position: relative;
   overflow: hidden;
 }
 
 .panel::before {
   content: '';
-  position: absolute; top: 0; left: 0; right: 0;
+  position: absolute; top: 0; left: 24px; right: 24px;
   height: 1px;
-  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
-  opacity: 0.6;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0.5;
 }
 
 .field-label {
   font-family: var(--font-mono);
   font-size: 10px;
-  letter-spacing: 0.3em;
-  color: var(--cyan-dim);
+  letter-spacing: 0.25em;
   text-transform: uppercase;
-  margin-bottom: 8px;
+  color: var(--muted);
+  margin-bottom: 10px;
 }
-
-/* ── Prompt textarea ── */
-.prompt-wrap { position: relative; }
 
 textarea {
   width: 100%;
-  background: rgba(0,0,0,0.4);
-  border: 1px solid rgba(0,229,255,0.2);
-  border-radius: 4px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
   color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 13px;
+  font-family: var(--font-ui);
+  font-size: 15px;
   line-height: 1.7;
-  padding: 14px 16px;
+  padding: 16px;
   resize: vertical;
-  min-height: 110px;
+  min-height: 120px;
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  caret-color: var(--cyan);
+  transition: border-color 0.2s, background 0.2s;
+  caret-color: var(--accent);
 }
-
-textarea::placeholder { color: var(--text-dim); font-style: italic; }
-
+textarea::placeholder { color: var(--muted); }
 textarea:focus {
-  border-color: var(--cyan-dim);
-  box-shadow: 0 0 0 1px rgba(0,229,255,0.1), inset 0 0 20px rgba(0,229,255,0.03);
+  border-color: rgba(124,106,247,0.5);
+  background: rgba(124,106,247,0.04);
 }
 
 /* ── Style pills ── */
-.styles {
+.style-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -238,84 +342,78 @@ textarea:focus {
 .style-pill {
   font-family: var(--font-mono);
   font-size: 10px;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  padding: 6px 14px;
-  border-radius: 2px;
-  border: 1px solid rgba(200,216,232,0.15);
-  background: rgba(0,0,0,0.3);
-  color: var(--text-dim);
+  padding: 7px 16px;
+  border-radius: 100px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.2s;
   user-select: none;
 }
-
-.style-pill:hover {
-  border-color: var(--cyan-dim);
-  color: var(--cyan);
-}
-
+.style-pill:hover { border-color: var(--border-h); color: var(--text); }
 .style-pill.active {
-  border-color: var(--cyan);
-  background: rgba(0,229,255,0.08);
-  color: var(--cyan);
-  box-shadow: 0 0 12px rgba(0,229,255,0.15);
+  border-color: var(--accent);
+  background: rgba(124,106,247,0.12);
+  color: var(--accent);
 }
 
-/* ── Submit button ── */
+/* ── Generate button ── */
 .btn-generate {
   width: 100%;
   margin-top: 24px;
   padding: 16px;
   font-family: var(--font-head);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
-  letter-spacing: 0.25em;
-  text-transform: uppercase;
-  background: transparent;
-  border: 1px solid var(--cyan);
-  color: var(--cyan);
-  border-radius: 3px;
+  letter-spacing: 0.05em;
+  background: linear-gradient(135deg, var(--accent) 0%, #9b6af7 100%);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
   cursor: pointer;
+  transition: all 0.25s;
   position: relative;
   overflow: hidden;
-  transition: all 0.2s;
 }
-
-.btn-generate::before {
+.btn-generate::after {
   content: '';
   position: absolute; inset: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(0,229,255,0.12) 50%, transparent 100%);
-  transform: translateX(-100%);
-  transition: transform 0.4s ease;
+  background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
+  opacity: 0;
+  transition: opacity 0.2s;
 }
-
-.btn-generate:hover::before { transform: translateX(100%); }
-.btn-generate:hover {
-  box-shadow: 0 0 20px rgba(0,229,255,0.3), 0 0 60px rgba(0,229,255,0.1);
-  background: rgba(0,229,255,0.05);
-}
-
+.btn-generate:hover { transform: translateY(-1px); box-shadow: 0 8px 30px var(--glow); }
+.btn-generate:hover::after { opacity: 1; }
 .btn-generate:active { transform: scale(0.99); }
 .btn-generate:disabled {
-  opacity: 0.4;
+  opacity: 0.5;
   cursor: not-allowed;
-  pointer-events: none;
+  transform: none;
+  box-shadow: none;
 }
 
 /* ── Progress panel ── */
 .progress-panel {
-  width: 100%;
+  margin-top: 16px;
   display: none;
 }
-
 .progress-panel.visible { display: block; }
+
+.prog-inner {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px;
+}
 
 .prog-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .prog-status {
@@ -324,47 +422,37 @@ textarea:focus {
   letter-spacing: 0.2em;
   text-transform: uppercase;
 }
-
-.prog-status.pending  { color: var(--amber); }
-.prog-status.processing { color: var(--cyan); }
-.prog-status.done     { color: var(--green); }
-.prog-status.failed   { color: var(--red); }
+.prog-status.pending    { color: #f7c26a; }
+.prog-status.processing { color: var(--accent); }
+.prog-status.done       { color: var(--green); }
+.prog-status.failed     { color: #f76a6a; }
 
 .prog-id {
   font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--text-dim);
-  letter-spacing: 0.05em;
+  color: var(--muted);
 }
 
-/* ── Scanner animation ── */
+/* ── Scanner box ── */
 .scanner-box {
-  position: relative;
   width: 100%;
-  aspect-ratio: 16/9;
-  background: rgba(0,0,0,0.6);
+  aspect-ratio: 3/2;
+  background: rgba(255,255,255,0.03);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 10px;
   overflow: hidden;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.scanner-grid {
-  position: absolute; inset: 0;
-  background-image:
-    linear-gradient(rgba(0,229,255,0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,229,255,0.04) 1px, transparent 1px);
-  background-size: 20px 20px;
-}
-
 .scanner-line {
   position: absolute;
   left: 0; right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
-  box-shadow: 0 0 12px var(--cyan), 0 0 30px rgba(0,229,255,0.5);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  box-shadow: 0 0 10px var(--accent), 0 0 30px rgba(124,106,247,0.4);
   animation: scan 2.5s ease-in-out infinite;
 }
 
@@ -377,106 +465,87 @@ textarea:focus {
 
 .scanner-text {
   font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.2em;
-  color: var(--cyan-dim);
-  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  color: var(--muted);
   z-index: 2;
-  animation: flicker 3s ease infinite;
 }
 
-@keyframes flicker {
-  0%, 100% { opacity: 1; }
-  92% { opacity: 1; }
-  93% { opacity: 0.3; }
-  94% { opacity: 1; }
-  96% { opacity: 0.5; }
-  97% { opacity: 1; }
-}
-
-.scanner-corners::before,
-.scanner-corners::after {
-  content: '';
-  position: absolute;
-  width: 20px; height: 20px;
-  border-color: var(--cyan);
-  border-style: solid;
-  opacity: 0.6;
-}
-.scanner-corners::before { top: 8px; left: 8px; border-width: 1px 0 0 1px; }
-.scanner-corners::after  { bottom: 8px; right: 8px; border-width: 0 1px 1px 0; }
-
-/* ── Result image ── */
+/* ── Result ── */
 .result-wrap {
-  width: 100%;
+  margin-top: 16px;
   display: none;
 }
 .result-wrap.visible { display: block; }
 
-.result-img-box {
-  position: relative;
-  width: 100%;
-  border: 1px solid rgba(0,255,157,0.25);
-  border-radius: 4px;
+.result-inner {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 0 30px rgba(0,255,157,0.1);
 }
 
-.result-img-box img {
+.result-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 16px 20px 0;
+}
+
+.result-img-wrap {
+  position: relative;
+  margin-top: 12px;
+}
+.result-img-wrap img {
   width: 100%;
   height: auto;
   display: block;
 }
 
-.result-overlay {
-  position: absolute; inset: 0;
-  background: linear-gradient(180deg, transparent 60%, rgba(6,7,13,0.9) 100%);
+.result-actions {
+  padding: 16px 20px;
   display: flex;
-  align-items: flex-end;
-  padding: 16px;
-  opacity: 0;
-  transition: opacity 0.3s;
+  gap: 10px;
 }
 
-.result-img-box:hover .result-overlay { opacity: 1; }
-
-.btn-download {
+.btn-action {
   font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--green);
-  border: 1px solid var(--green);
-  background: rgba(0,0,0,0.7);
-  padding: 8px 18px;
-  border-radius: 2px;
+  padding: 9px 18px;
+  border-radius: 8px;
+  border: 1px solid var(--border-h);
+  background: rgba(255,255,255,0.05);
+  color: var(--text);
   cursor: pointer;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   transition: all 0.2s;
 }
-
-.btn-download:hover {
-  background: rgba(0,255,157,0.1);
-  box-shadow: 0 0 15px rgba(0,255,157,0.2);
+.btn-action:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.25);
 }
 
-/* ── Error toast ── */
+/* ── Toast ── */
 .toast {
   position: fixed;
-  bottom: 24px; left: 50%;
-  transform: translateX(-50%) translateY(20px);
-  background: rgba(255,59,59,0.15);
-  border: 1px solid var(--red);
-  color: var(--red);
+  bottom: 28px; left: 50%;
+  transform: translateX(-50%) translateY(16px);
+  background: rgba(20,20,30,0.95);
+  border: 1px solid rgba(247,118,118,0.4);
+  color: #f77676;
   font-family: var(--font-mono);
   font-size: 12px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   padding: 12px 24px;
-  border-radius: 3px;
-  box-shadow: 0 0 20px rgba(255,59,59,0.15);
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.4);
   opacity: 0;
   transition: all 0.3s;
   z-index: 9000;
@@ -484,257 +553,278 @@ textarea:focus {
   white-space: nowrap;
   max-width: 90vw;
 }
-
-.toast.show {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* ── Footer ── */
 .footer {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--text-dim);
-  letter-spacing: 0.2em;
+  position: relative; z-index: 1;
   text-align: center;
+  padding: 40px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
   opacity: 0.5;
-}
-
-/* ── Lang toggle ── */
-.lang-toggle {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.15em;
-  color: var(--text-dim);
-  background: none;
-  border: 1px solid rgba(200,216,232,0.15);
-  border-radius: 2px;
-  padding: 2px 8px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.lang-toggle:hover { color: var(--cyan); border-color: var(--cyan-dim); }
-
-/* ── Boot sequence ── */
-.boot-screen {
-  position: fixed; inset: 0;
-  background: var(--bg);
-  z-index: 10000;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--cyan-dim);
   letter-spacing: 0.1em;
-  transition: opacity 0.5s;
 }
 
-.boot-screen.fade { opacity: 0; pointer-events: none; }
-.boot-line { animation: bootfade 0.1s forwards; opacity: 0; }
-@keyframes bootfade { to { opacity: 1; } }
+/* ── Animations ── */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
 
-/* ── Divider ── */
-.divider {
-  width: 100%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--border), transparent);
-  margin: 4px 0;
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.fade-up {
+  opacity: 0;
+  animation: fadeUp 0.6s ease forwards;
 }
 
 /* ── Mobile ── */
-@media (max-width: 480px) {
-  .page { padding: 32px 16px 60px; }
-  .panel { padding: 20px; }
-  .styles { gap: 6px; }
-  .style-pill { padding: 5px 10px; font-size: 9px; }
-}
-
-/* ── Entrance animation ── */
-.page > * {
-  opacity: 0;
-  transform: translateY(10px);
-  animation: enter 0.5s forwards;
-}
-.page > *:nth-child(1) { animation-delay: 0.6s; }
-.page > *:nth-child(2) { animation-delay: 0.75s; }
-.page > *:nth-child(3) { animation-delay: 0.9s; }
-.page > *:nth-child(4) { animation-delay: 1.05s; }
-
-@keyframes enter {
-  to { opacity: 1; transform: none; }
+@media (max-width: 600px) {
+  .nav { padding: 14px 20px; }
+  .hero { padding: 120px 20px 60px; }
+  .gallery-section { padding: 0 20px 60px; }
+  .panel { padding: 24px 20px; }
+  .gallery-card { flex: 0 0 200px; }
 }
 </style>
 </head>
 <body>
 
-<div class="vignette"></div>
-
-<!-- Boot sequence -->
-<div class="boot-screen" id="bootScreen">
-  <div class="boot-line" style="animation-delay:0.1s">NODA SYNTHESIS ENGINE v2.4.1</div>
-  <div class="boot-line" style="animation-delay:0.3s;color:#555">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</div>
-  <div class="boot-line" style="animation-delay:0.5s">[ OK ] Loading FLUX.2 Klein 4B model...</div>
-  <div class="boot-line" style="animation-delay:0.8s">[ OK ] Redis job queue connected</div>
-  <div class="boot-line" style="animation-delay:1.1s">[ OK ] GPU inference engine ready (RTX 3060 Ti)</div>
-  <div class="boot-line" style="animation-delay:1.4s;color:var(--amber)">[ -- ] Awaiting synthesis requests</div>
-  <div class="boot-line" style="animation-delay:1.7s;color:#555">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</div>
-</div>
-
-<div class="page">
-
-  <!-- Header -->
-  <header class="header">
-    <div class="logo" data-text="NODA.PICS">NODA.PICS</div>
-    <div class="tagline">AI IMAGE SYNTHESIS ENGINE <span>▮</span></div>
-  </header>
-
-  <!-- Status bar -->
-  <div class="statusbar">
-    <span><span class="dot"></span><span id="sysStatus" data-i18n="sysStatus">SYSTEM ONLINE</span></span>
-    <span style="display:flex;align-items:center;gap:12px">
-      <span id="queueStatus" data-i18n-tpl="queueStatus">QUEUE: —</span>
-      <button class="lang-toggle" id="langToggle">中文</button>
-    </span>
+<!-- NAV -->
+<nav class="nav">
+  <a class="nav-logo" href="/">NODA<span>.</span>PICS</a>
+  <div class="nav-right">
+    <span class="nav-queue"><span class="dot"></span><span id="queueTxt">—</span></span>
+    <button class="nav-lang" id="langBtn">EN</button>
   </div>
+</nav>
 
-  <!-- Input panel -->
-  <div class="panel">
-    <div class="field-label" id="labelPrompt" data-i18n="labelPrompt">// PROMPT INPUT</div>
-    <div class="prompt-wrap">
-      <textarea id="prompt" rows="4" data-i18n-placeholder="placeholder"
-        placeholder="a lone astronaut standing on a red cliff, vast alien sky, twin moons rising..."></textarea>
+<!-- HERO -->
+<section class="hero fade-up" style="animation-delay:0.1s">
+  <div class="hero-glow"></div>
+  <div class="hero-tag" data-i18n="heroTag">AI 图像生成引擎</div>
+  <h1>
+    <span data-i18n="heroLine1">用文字描述你的</span>
+    <span class="line2" data-i18n="heroLine2">想象世界</span>
+  </h1>
+  <p class="hero-sub" data-i18n="heroSub">基于 FLUX.2 Klein 本地推理，输入一句话，几十秒后看见你的画面。</p>
+</section>
+
+<!-- EXAMPLE GALLERY -->
+<section class="gallery-section fade-up" style="animation-delay:0.25s">
+  <div class="gallery-label" data-i18n="galleryLabel">// 示例作品 · 点击使用</div>
+  <div class="gallery-scroll" id="galleryScroll">
+
+    <div class="gallery-card" data-prompt="a lone astronaut standing on the edge of a red canyon, vast alien sky with twin moons rising, ancient stone ruins in the distance" data-style="retro-scifi">
+      <div class="gallery-img" style="background:linear-gradient(160deg,#1a0a2e,#3d1a5c,#8b2252)"></div>
+      <div class="gallery-style-tag">复古科幻</div>
+      <div class="gallery-overlay">
+        <div class="gallery-prompt">a lone astronaut standing on the edge of a red canyon, vast alien sky with twin moons rising</div>
+        <div class="gallery-use">→ 使用此提示词</div>
+      </div>
     </div>
 
-    <div class="divider" style="margin-top:20px"></div>
+    <div class="gallery-card" data-prompt="ancient Japanese shrine hidden in a misty bamboo forest at dawn, golden light filtering through leaves, koi pond reflection" data-style="ukiyo-e">
+      <div class="gallery-img" style="background:linear-gradient(160deg,#0a1a0a,#1a3d1a,#2d5c2d)"></div>
+      <div class="gallery-style-tag">浮世绘</div>
+      <div class="gallery-overlay">
+        <div class="gallery-prompt">ancient Japanese shrine hidden in a misty bamboo forest at dawn, golden light filtering through leaves</div>
+        <div class="gallery-use">→ 使用此提示词</div>
+      </div>
+    </div>
 
-    <div class="field-label" id="labelStyle" style="margin-top:16px" data-i18n="labelStyle">// RENDER STYLE</div>
-    <div class="styles" id="styleGrid">
-      <div class="style-pill active" data-value="default"   data-i18n-pill="styleDefault">STANDARD</div>
-      <div class="style-pill" data-value="retro-scifi"      data-i18n-pill="styleRetro">RETRO SCI-FI</div>
-      <div class="style-pill" data-value="oil-painting"     data-i18n-pill="styleOil">OIL PAINTING</div>
-      <div class="style-pill" data-value="ghibli"           data-i18n-pill="styleGhibli">GHIBLI</div>
-      <div class="style-pill" data-value="ukiyo-e"          data-i18n-pill="styleUkiyo">UKIYO-E</div>
+    <div class="gallery-card" data-prompt="cyberpunk street market at night, neon reflections on wet pavement, steam rising from food stalls, crowded and vibrant" data-style="default">
+      <div class="gallery-img" style="background:linear-gradient(160deg,#0a0a1a,#1a1a3d,#0a2d3d)"></div>
+      <div class="gallery-style-tag">标准</div>
+      <div class="gallery-overlay">
+        <div class="gallery-prompt">cyberpunk street market at night, neon reflections on wet pavement, steam rising from food stalls</div>
+        <div class="gallery-use">→ 使用此提示词</div>
+      </div>
+    </div>
+
+    <div class="gallery-card" data-prompt="oil painting portrait of an old fisherman, weathered face full of stories, stormy sea behind him, rembrandt lighting" data-style="oil-painting">
+      <div class="gallery-img" style="background:linear-gradient(160deg,#1a100a,#3d2510,#5c3015)"></div>
+      <div class="gallery-style-tag">油画</div>
+      <div class="gallery-overlay">
+        <div class="gallery-prompt">oil painting portrait of an old fisherman, weathered face full of stories, stormy sea behind him, rembrandt lighting</div>
+        <div class="gallery-use">→ 使用此提示词</div>
+      </div>
+    </div>
+
+    <div class="gallery-card" data-prompt="a tiny house on a floating island in the clouds, surrounded by waterfalls and rainbow bridges, studio ghibli style" data-style="ghibli">
+      <div class="gallery-img" style="background:linear-gradient(160deg,#0a1a2e,#1a3d5c,#2d6b8c)"></div>
+      <div class="gallery-style-tag">吉卜力</div>
+      <div class="gallery-overlay">
+        <div class="gallery-prompt">a tiny house on a floating island in the clouds, surrounded by waterfalls and rainbow bridges, studio ghibli style</div>
+        <div class="gallery-use">→ 使用此提示词</div>
+      </div>
+    </div>
+
+    <div class="gallery-card" data-prompt="deep sea bioluminescent creatures in the abyss, ethereal blue and purple glow, jellyfish the size of buildings" data-style="default">
+      <div class="gallery-img" style="background:linear-gradient(160deg,#000a1a,#001a3d,#001a2e)"></div>
+      <div class="gallery-style-tag">标准</div>
+      <div class="gallery-overlay">
+        <div class="gallery-prompt">deep sea bioluminescent creatures in the abyss, ethereal blue and purple glow, jellyfish the size of buildings</div>
+        <div class="gallery-use">→ 使用此提示词</div>
+      </div>
+    </div>
+
+    <div class="gallery-card" data-prompt="retro 1960s space race poster, rocket launching from earth, bold typography, limited color palette of red and gold" data-style="retro-scifi">
+      <div class="gallery-img" style="background:linear-gradient(160deg,#1a0a00,#3d1500,#8b3500)"></div>
+      <div class="gallery-style-tag">复古科幻</div>
+      <div class="gallery-overlay">
+        <div class="gallery-prompt">retro 1960s space race poster, rocket launching from earth, bold typography, limited color palette of red and gold</div>
+        <div class="gallery-use">→ 使用此提示词</div>
+      </div>
+    </div>
+
+    <div class="gallery-card" data-prompt="cherry blossom festival by the riverside, lanterns floating on water, mountain silhouette at dusk, peaceful atmosphere" data-style="ukiyo-e">
+      <div class="gallery-img" style="background:linear-gradient(160deg,#1a0a14,#3d1428,#8b3068)"></div>
+      <div class="gallery-style-tag">浮世绘</div>
+      <div class="gallery-overlay">
+        <div class="gallery-prompt">cherry blossom festival by the riverside, lanterns floating on water, mountain silhouette at dusk</div>
+        <div class="gallery-use">→ 使用此提示词</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- MAIN INPUT PANEL -->
+<main class="main">
+
+  <div class="panel fade-up" style="animation-delay:0.4s">
+    <div class="field-label" data-i18n="fieldPrompt">// 描述你的画面</div>
+    <textarea id="prompt" rows="4" data-i18n-placeholder="placeholder"
+      placeholder="一位宇航员站在红色峡谷边缘，广阔的外星天空中双月冉冉升起…"></textarea>
+
+    <div class="style-row" id="styleGrid">
+      <div class="style-pill active" data-value="default"      data-i18n-pill="s0">标准</div>
+      <div class="style-pill"        data-value="retro-scifi"  data-i18n-pill="s1">复古科幻</div>
+      <div class="style-pill"        data-value="oil-painting" data-i18n-pill="s2">油画</div>
+      <div class="style-pill"        data-value="ghibli"       data-i18n-pill="s3">吉卜力</div>
+      <div class="style-pill"        data-value="ukiyo-e"      data-i18n-pill="s4">浮世绘</div>
     </div>
 
     <button class="btn-generate" id="btnGenerate" data-i18n="btnGenerate">
-      ⬡ &nbsp;INITIATE SYNTHESIS
+      开始生成
     </button>
   </div>
 
   <!-- Progress -->
-  <div class="panel progress-panel" id="progressPanel">
-    <div class="prog-header">
-      <span class="prog-status" id="progStatus">PENDING</span>
-      <span class="prog-id" id="progId">—</span>
-    </div>
-    <div class="scanner-box" id="scannerBox">
-      <div class="scanner-grid"></div>
-      <div class="scanner-corners"></div>
-      <div class="scanner-line" id="scannerLine"></div>
-      <div class="scanner-text" id="scannerText">INITIALIZING...</div>
-    </div>
-  </div>
-
-  <!-- Result -->
-  <div class="panel result-wrap" id="resultWrap">
-    <div class="field-label" data-i18n="labelResult">// SYNTHESIS COMPLETE</div>
-    <div class="result-img-box">
-      <img id="resultImg" src="" alt="Generated image">
-      <div class="result-overlay">
-        <a class="btn-download" id="btnDownload" href="#" download="noda-synthesis.png" data-i18n="btnDownload">
-          ↓ &nbsp;DOWNLOAD
-        </a>
+  <div class="progress-panel" id="progressPanel">
+    <div class="prog-inner">
+      <div class="prog-header">
+        <span class="prog-status pending" id="progStatus" data-i18n="statusPending">排队中</span>
+        <span class="prog-id" id="progId">—</span>
+      </div>
+      <div class="scanner-box">
+        <div class="scanner-line" id="scannerLine"></div>
+        <span class="scanner-text" id="scannerText" data-i18n="scannerInit">初始化中…</span>
       </div>
     </div>
   </div>
 
-  <footer class="footer" data-i18n="footer">NODA.PICS &nbsp;·&nbsp; POWERED BY FLUX.2 KLEIN &nbsp;·&nbsp; LOCAL GPU INFERENCE</footer>
-</div>
+  <!-- Result -->
+  <div class="result-wrap" id="resultWrap">
+    <div class="result-inner">
+      <div class="result-label" data-i18n="resultLabel">// 生成完成</div>
+      <div class="result-img-wrap">
+        <img id="resultImg" src="" alt="">
+      </div>
+      <div class="result-actions">
+        <a class="btn-action" id="btnDownload" href="#" download="noda.png" data-i18n="btnDownload">↓ 下载</a>
+        <button class="btn-action" id="btnAgain" data-i18n="btnAgain">↺ 再生成</button>
+      </div>
+    </div>
+  </div>
 
-<!-- Toast -->
+</main>
+
+<footer class="footer">NODA.PICS &nbsp;·&nbsp; FLUX.2 KLEIN &nbsp;·&nbsp; LOCAL GPU INFERENCE</footer>
+
 <div class="toast" id="toast"></div>
 
 <script>
-// ── i18n ─────────────────────────────────────────────
+// ── i18n ──────────────────────────────────────────────
 const I18N = {
-  en: {
-    sysStatus:        'SYSTEM ONLINE',
-    queueStatus:      'QUEUE: {n}',
-    labelPrompt:      '// PROMPT INPUT',
-    labelStyle:       '// RENDER STYLE',
-    labelResult:      '// SYNTHESIS COMPLETE',
-    placeholder:      'a lone astronaut standing on a red cliff, vast alien sky, twin moons rising...',
-    styleDefault:     'STANDARD',
-    styleRetro:       'RETRO SCI-FI',
-    styleOil:         'OIL PAINTING',
-    styleGhibli:      'GHIBLI',
-    styleUkiyo:       'UKIYO-E',
-    btnGenerate:      '⬡ \u00a0INITIATE SYNTHESIS',
-    btnGenerating:    '◌ \u00a0SYNTHESIZING...',
-    btnDownload:      '↓ \u00a0DOWNLOAD',
-    footer:           'NODA.PICS \u00a0·\u00a0 POWERED BY FLUX.2 KLEIN \u00a0·\u00a0 LOCAL GPU INFERENCE',
-    scannerInit:      'INITIALIZING...',
-    scannerQueue:     'QUEUE POSITION: {n}',
-    scannerRender:    'RENDERING LATENT SPACE...',
-    statusQueued:     'QUEUED',
-    statusProcessing: 'SYNTHESIZING',
-    statusDone:       'COMPLETE',
-    errPrompt:        '// ERROR: PROMPT REQUIRED',
-    errRateLimit:     '// RATE LIMIT: MAX 5 JOBS PER HOUR',
-    errQueueFull:     '// QUEUE FULL: RETRY IN A MOMENT',
-    errConnection:    '// CONNECTION ERROR: ',
-    errTimeout:       '// TIMEOUT: JOB EXCEEDED 6 MINUTE LIMIT',
-    errFailed:        '// SYNTHESIS FAILED: ',
-    langToggle:       '中文',
-  },
   zh: {
-    sysStatus:        '系统在线',
-    queueStatus:      '队列: {n}',
-    labelPrompt:      '// 输入描述词',
-    labelStyle:       '// 渲染风格',
-    labelResult:      '// 合成完成',
-    placeholder:      '宇航员独自站在红色悬崖边，广阔的外星天空，双月缓缓升起……',
-    styleDefault:     '标准',
-    styleRetro:       '复古科幻',
-    styleOil:         '油画',
-    styleGhibli:      '吉卜力',
-    styleUkiyo:       '浮世绘',
-    btnGenerate:      '⬡ \u00a0开始生成',
-    btnGenerating:    '◌ \u00a0合成中…',
-    btnDownload:      '↓ \u00a0下载图片',
-    footer:           'NODA.PICS \u00a0·\u00a0 基于 FLUX.2 KLEIN \u00a0·\u00a0 本地 GPU 推理',
-    scannerInit:      '初始化中…',
-    scannerQueue:     '排队位置：第 {n} 位',
-    scannerRender:    '渲染潜空间中…',
-    statusQueued:     '排队中',
-    statusProcessing: '合成中',
-    statusDone:       '已完成',
-    errPrompt:        '// 错误：请输入描述词',
-    errRateLimit:     '// 频率限制：每小时最多 5 个任务',
-    errQueueFull:     '// 队列已满，请稍后重试',
-    errConnection:    '// 连接错误：',
-    errTimeout:       '// 超时：任务超过 6 分钟',
-    errFailed:        '// 合成失败：',
-    langToggle:       'EN',
+    heroTag:      'AI 图像生成引擎',
+    heroLine1:    '用文字描述你的',
+    heroLine2:    '想象世界',
+    heroSub:      '基于 FLUX.2 Klein 本地推理，输入一句话，几十秒后看见你的画面。',
+    galleryLabel: '// 示例作品 · 点击使用',
+    fieldPrompt:  '// 描述你的画面',
+    placeholder:  '一位宇航员站在红色峡谷边缘，广阔的外星天空中双月冉冉升起…',
+    s0:'标准', s1:'复古科幻', s2:'油画', s3:'吉卜力', s4:'浮世绘',
+    btnGenerate:  '开始生成',
+    btnGenerating:'生成中…',
+    statusPending:'排队中',
+    statusProc:   '生成中',
+    statusDone:   '完成',
+    statusFailed: '失败',
+    scannerInit:  '初始化中…',
+    scannerQueue: '队列位置：第 {n} 位',
+    scannerRender:'渲染中…',
+    resultLabel:  '// 生成完成',
+    btnDownload:  '↓ 下载',
+    btnAgain:     '↺ 再生成',
+    errPrompt:    '请输入描述词',
+    errRate:      '每小时最多 5 次，请稍后再试',
+    errQueue:     '队列已满，请稍后再试',
+    errConn:      '连接失败：',
+    errTimeout:   '任务超时（超过 6 分钟）',
+    errFailed:    '生成失败：',
+    langLabel:    'EN',
+  },
+  en: {
+    heroTag:      'AI Image Synthesis Engine',
+    heroLine1:    'Describe your',
+    heroLine2:    'Imagination',
+    heroSub:      'Powered by FLUX.2 Klein with local GPU inference. Type a sentence, see your vision in seconds.',
+    galleryLabel: '// EXAMPLES · CLICK TO USE',
+    fieldPrompt:  '// PROMPT',
+    placeholder:  'a lone astronaut on a red canyon edge, alien sky with twin moons rising…',
+    s0:'Standard', s1:'Retro Sci-Fi', s2:'Oil Painting', s3:'Ghibli', s4:'Ukiyo-e',
+    btnGenerate:  'Generate',
+    btnGenerating:'Generating…',
+    statusPending:'Queued',
+    statusProc:   'Synthesizing',
+    statusDone:   'Complete',
+    statusFailed: 'Failed',
+    scannerInit:  'Initializing…',
+    scannerQueue: 'Queue position: {n}',
+    scannerRender:'Rendering…',
+    resultLabel:  '// RESULT',
+    btnDownload:  '↓ Download',
+    btnAgain:     '↺ Regenerate',
+    errPrompt:    'Please enter a prompt',
+    errRate:      'Rate limit: 5 per hour',
+    errQueue:     'Queue full, try again later',
+    errConn:      'Connection error: ',
+    errTimeout:   'Timeout: job exceeded 6 minutes',
+    errFailed:    'Failed: ',
+    langLabel:    '中文',
   },
 };
 
-let lang = (navigator.language || 'en').startsWith('zh') ? 'zh' : 'en';
+let lang = (navigator.language || 'zh').startsWith('zh') ? 'zh' : 'en';
 
-function t(key, vars = {}) {
-  let s = (I18N[lang] || I18N.en)[key] || key;
-  for (const [k, v] of Object.entries(vars)) s = s.replace(`{${k}}`, v);
+function t(k, v = {}) {
+  let s = (I18N[lang] || I18N.zh)[k] || k;
+  for (const [key, val] of Object.entries(v)) s = s.replace(`{${key}}`, val);
   return s;
 }
 
 function applyLang() {
   document.querySelectorAll('[data-i18n]').forEach(el => {
-    const key = el.dataset.i18n;
-    if (el.tagName === 'BUTTON' || el.tagName === 'A') el.innerHTML = t(key);
-    else el.textContent = t(key);
+    const k = el.dataset.i18n;
+    el.textContent = t(k);
   });
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
     el.placeholder = t(el.dataset.i18nPlaceholder);
@@ -742,46 +832,30 @@ function applyLang() {
   document.querySelectorAll('[data-i18n-pill]').forEach(el => {
     el.textContent = t(el.dataset.i18nPill);
   });
-  document.getElementById('langToggle').textContent = t('langToggle');
-  // queue status
-  const qs = document.getElementById('queueStatus');
-  if (qs) {
-    const m = qs.textContent.match(/\d+/);
-    qs.textContent = m ? t('queueStatus', { n: m[0] + '/' + m[1] }) : (lang === 'zh' ? '队列: —' : 'QUEUE: —');
-  }
+  document.getElementById('langBtn').textContent = t('langLabel');
+
+  // Gallery use-prompt labels
+  document.querySelectorAll('.gallery-use').forEach(el => {
+    el.textContent = lang === 'zh' ? '→ 使用此提示词' : '→ Use this prompt';
+  });
 }
 
-document.getElementById('langToggle').addEventListener('click', () => {
-  lang = lang === 'en' ? 'zh' : 'en';
+document.getElementById('langBtn').addEventListener('click', () => {
+  lang = lang === 'zh' ? 'en' : 'zh';
   applyLang();
 });
 
-const API_BASE = ''; // 同域，Render 上 Flask 同时 serve 前端和 API
-const POLL_INTERVAL = 3000;
-const POLL_MAX = 120;
-
+// ── Style selection ──────────────────────────────────
 const STYLE_PROMPTS = {
   'default':      '',
-  'retro-scifi':  'vintage retro science fiction magazine cover art style, 1960s illustration, bold graphic design, halftone dot texture, limited color palette of red orange teal, retro futurism aesthetic, dynamic composition,',
-  'oil-painting': 'impressionist oil painting style, post-impressionist brushstrokes, thick expressive paint strokes, rich color palette, painterly texture, museum quality artwork,',
-  'ghibli':       'Studio Ghibli style illustration, hand-drawn animation, soft painterly textures, whimsical atmosphere, warm lighting, detailed backgrounds, cel animation style,',
-  'ukiyo-e':      'Japanese ukiyo-e woodblock print style, flat bold colors, strong black outlines, decorative patterns, traditional Japanese aesthetic, elegant composition,',
+  'retro-scifi':  'vintage retro science fiction magazine cover art style, 1960s illustration, bold graphic design, halftone dot texture, limited color palette of red orange teal, retro futurism aesthetic,',
+  'oil-painting': 'impressionist oil painting style, thick expressive brushstrokes, rich color palette, painterly texture, museum quality artwork,',
+  'ghibli':       'Studio Ghibli style illustration, hand-drawn animation, soft painterly textures, whimsical atmosphere, warm lighting, detailed backgrounds,',
+  'ukiyo-e':      'Japanese ukiyo-e woodblock print style, flat bold colors, strong black outlines, decorative patterns, traditional Japanese aesthetic,',
 };
 
 let selectedStyle = 'default';
-let pollTimer = null;
-let pollCount = 0;
 
-// ── Boot sequence ──
-const boot = document.getElementById('bootScreen');
-setTimeout(() => {
-  boot.classList.add('fade');
-  setTimeout(() => boot.remove(), 500);
-  applyLang();
-  loadStats();
-}, 2400);
-
-// ── Style pills ──
 document.getElementById('styleGrid').addEventListener('click', e => {
   const pill = e.target.closest('.style-pill');
   if (!pill) return;
@@ -790,150 +864,168 @@ document.getElementById('styleGrid').addEventListener('click', e => {
   selectedStyle = pill.dataset.value;
 });
 
-// ── Queue stats ──
+// ── Gallery click-to-use ─────────────────────────────
+document.getElementById('galleryScroll').addEventListener('click', e => {
+  const card = e.target.closest('.gallery-card');
+  if (!card) return;
+  const prompt = card.dataset.prompt;
+  const style  = card.dataset.style;
+
+  document.getElementById('prompt').value = prompt;
+  if (style) {
+    document.querySelectorAll('.style-pill').forEach(p => {
+      p.classList.toggle('active', p.dataset.value === style);
+    });
+    selectedStyle = style;
+  }
+  document.querySelector('.main').scrollIntoView({ behavior: 'smooth' });
+});
+
+// ── Gallery drag scroll ──────────────────────────────
+const scroll = document.getElementById('galleryScroll');
+let isDown = false, startX, scrollLeft;
+scroll.addEventListener('mousedown', e => { isDown = true; startX = e.pageX - scroll.offsetLeft; scrollLeft = scroll.scrollLeft; });
+scroll.addEventListener('mouseleave', () => isDown = false);
+scroll.addEventListener('mouseup', () => isDown = false);
+scroll.addEventListener('mousemove', e => {
+  if (!isDown) return;
+  e.preventDefault();
+  const x = e.pageX - scroll.offsetLeft;
+  scroll.scrollLeft = scrollLeft - (x - startX) * 1.5;
+});
+
+// ── Stats ────────────────────────────────────────────
 async function loadStats() {
   try {
-    const r = await fetch(`${API_BASE}/api/stats`);
-    const d = await r.json();
-    document.getElementById('queueStatus').textContent =
-      t('queueStatus', { n: `${d.queue_len}/${d.queue_max}` });
-  } catch {
-    document.getElementById('queueStatus').textContent = lang === 'zh' ? '队列: —' : 'QUEUE: —';
-  }
+    const d = await fetch('/api/stats').then(r => r.json());
+    document.getElementById('queueTxt').textContent =
+      lang === 'zh' ? `队列 ${d.queue_len}/${d.queue_max}` : `Queue ${d.queue_len}/${d.queue_max}`;
+  } catch { document.getElementById('queueTxt').textContent = '—'; }
 }
 
-// ── Submit ──
-document.getElementById('btnGenerate').addEventListener('click', async () => {
+// ── Generate ─────────────────────────────────────────
+const POLL_INTERVAL = 3000;
+const POLL_MAX = 120;
+let pollTimer = null;
+
+document.getElementById('btnGenerate').addEventListener('click', generate);
+document.getElementById('btnAgain').addEventListener('click', () => {
+  document.getElementById('resultWrap').classList.remove('visible');
+  generate();
+});
+
+async function generate() {
   const prompt = document.getElementById('prompt').value.trim();
   if (!prompt) { showToast(t('errPrompt')); return; }
 
-  const style = selectedStyle;
-  const stylePrefix = STYLE_PROMPTS[style] || '';
-  const fullPrompt = stylePrefix ? `${stylePrefix} ${prompt}` : prompt;
+  const stylePrefix = STYLE_PROMPTS[selectedStyle] || '';
+  const fullPrompt  = stylePrefix ? `${stylePrefix} ${prompt}` : prompt;
 
   setGenerating(true);
-  showProgress('pending', '—');
+  showProgress();
 
   try {
-    const r = await fetch(`${API_BASE}/api/jobs`, {
+    const r = await fetch('/api/jobs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: fullPrompt, style }),
+      body: JSON.stringify({ prompt: fullPrompt, style: selectedStyle }),
     });
 
-    if (r.status === 429) { setGenerating(false); showToast(t('errRateLimit')); hideProgress(); return; }
-    if (r.status === 503) { setGenerating(false); showToast(t('errQueueFull')); hideProgress(); return; }
+    if (r.status === 429) { reset(); showToast(t('errRate')); return; }
+    if (r.status === 503) { reset(); showToast(t('errQueue')); return; }
     if (!r.ok) throw new Error(await r.text());
 
     const d = await r.json();
-    startPolling(d.job_id, d.queue_pos);
+    poll(d.job_id, d.queue_pos);
   } catch (e) {
-    setGenerating(false);
-    showToast(t('errConnection') + e.message.slice(0, 40));
-    hideProgress();
+    reset();
+    showToast(t('errConn') + String(e).slice(0, 40));
   }
-});
+}
 
-// ── Polling ──
-function startPolling(jobId, queuePos) {
-  pollCount = 0;
-  clearInterval(pollTimer);
-
-  updateScannerText(t('scannerQueue', { n: queuePos || '?' }));
-  document.getElementById('progId').textContent = `JOB ${jobId.slice(0, 8).toUpperCase()}`;
+function poll(jobId, queuePos) {
+  let count = 0;
+  updateScanner(t('scannerQueue', { n: queuePos || '?' }));
+  document.getElementById('progId').textContent = jobId.slice(0, 8).toUpperCase();
 
   pollTimer = setInterval(async () => {
-    pollCount++;
-    if (pollCount > POLL_MAX) {
-      clearInterval(pollTimer);
-      showToast(t('errTimeout'));
-      setGenerating(false);
-      hideProgress();
-      return;
-    }
-
+    if (++count > POLL_MAX) { reset(); showToast(t('errTimeout')); return; }
     try {
-      const r = await fetch(`${API_BASE}/api/jobs/${jobId}`);
-      const d = await r.json();
-
+      const d = await fetch(`/api/jobs/${jobId}`).then(r => r.json());
       if (d.status === 'pending') {
-        const pos = d.queue_pos || '?';
-        updateScannerText(t('scannerQueue', { n: pos }));
-        setProgStatus('pending', t('statusQueued'));
+        setStatus('pending', t('statusPending'));
+        updateScanner(t('scannerQueue', { n: d.queue_pos || '?' }));
       } else if (d.status === 'processing') {
-        updateScannerText(t('scannerRender'));
-        setProgStatus('processing', t('statusProcessing'));
+        setStatus('processing', t('statusProc'));
+        updateScanner(t('scannerRender'));
       } else if (d.status === 'done') {
         clearInterval(pollTimer);
-        setProgStatus('done', t('statusDone'));
+        setStatus('done', t('statusDone'));
         hideProgress();
         showResult(d.image_url);
         setGenerating(false);
         loadStats();
       } else if (d.status === 'failed') {
         clearInterval(pollTimer);
-        setGenerating(false);
-        hideProgress();
-        showToast(t('errFailed') + (d.error || 'UNKNOWN'));
+        reset();
+        showToast(t('errFailed') + (d.error || ''));
       }
-    } catch {
-      // network hiccup, keep polling
-    }
+    } catch { /* keep polling */ }
   }, POLL_INTERVAL);
 }
 
-// ── UI helpers ──
+// ── UI helpers ───────────────────────────────────────
 function setGenerating(on) {
   document.getElementById('btnGenerate').disabled = on;
-  document.getElementById('btnGenerate').textContent = on
-    ? t('btnGenerating')
-    : t('btnGenerate');
+  document.getElementById('btnGenerate').textContent = on ? t('btnGenerating') : t('btnGenerate');
 }
 
-function showProgress(status, id) {
+function showProgress() {
   document.getElementById('progressPanel').classList.add('visible');
   document.getElementById('resultWrap').classList.remove('visible');
-  setProgStatus(status, 'QUEUED');
-  document.getElementById('progId').textContent = id ? `JOB ${id.slice(0,8).toUpperCase()}` : '—';
   document.getElementById('scannerLine').style.display = '';
+  setStatus('pending', t('statusPending'));
 }
 
 function hideProgress() {
   document.getElementById('scannerLine').style.display = 'none';
-  setTimeout(() => {
-    document.getElementById('progressPanel').classList.remove('visible');
-  }, 400);
+  setTimeout(() => document.getElementById('progressPanel').classList.remove('visible'), 300);
 }
 
-function setProgStatus(cls, label) {
+function setStatus(cls, label) {
   const el = document.getElementById('progStatus');
   el.className = `prog-status ${cls}`;
   el.textContent = label;
 }
 
-function updateScannerText(text) {
+function updateScanner(text) {
   document.getElementById('scannerText').textContent = text;
 }
 
 function showResult(url) {
-  const wrap = document.getElementById('resultWrap');
-  const img  = document.getElementById('resultImg');
-  const btn  = document.getElementById('btnDownload');
-
+  const img = document.getElementById('resultImg');
   img.src = url;
-  btn.href = url;
-  wrap.classList.add('visible');
-  wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.getElementById('btnDownload').href = url;
+  document.getElementById('resultWrap').classList.add('visible');
+  document.getElementById('resultWrap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function reset() {
+  clearInterval(pollTimer);
+  hideProgress();
+  setGenerating(false);
 }
 
 function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 4000);
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 4000);
 }
 
-// ── Periodic stats refresh ──
+// ── Init ─────────────────────────────────────────────
+applyLang();
+loadStats();
 setInterval(loadStats, 30000);
 </script>
 </body>
