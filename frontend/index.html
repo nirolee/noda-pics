@@ -88,6 +88,193 @@ body::before {
 }
 .nav-lang:hover { color: var(--text); border-color: var(--border-h); }
 
+/* ── Auth button ── */
+.nav-auth {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  background: rgba(124,106,247,0.15);
+  border: 1px solid rgba(124,106,247,0.35);
+  border-radius: 6px;
+  padding: 5px 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.nav-auth:hover { background: rgba(124,106,247,0.25); }
+
+.nav-avatar {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--border-h);
+  cursor: pointer;
+  object-fit: cover;
+  transition: border-color 0.2s;
+}
+.nav-avatar:hover { border-color: var(--accent); }
+
+.nav-user-name {
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Quota badge ── */
+.quota-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.quota-badge.warn { color: var(--accent2); border-color: rgba(247,124,106,0.3); }
+
+/* ── Auth Modal ── */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(6px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s;
+}
+.modal-backdrop.open { opacity: 1; pointer-events: all; }
+
+.modal {
+  background: #13151f;
+  border: 1px solid var(--border-h);
+  border-radius: 20px;
+  padding: 36px 32px;
+  width: 100%;
+  max-width: 400px;
+  position: relative;
+  transform: translateY(16px);
+  transition: transform 0.25s;
+}
+.modal-backdrop.open .modal { transform: none; }
+
+.modal-close {
+  position: absolute; top: 16px; right: 16px;
+  background: none; border: none;
+  color: var(--muted); font-size: 20px;
+  cursor: pointer; line-height: 1;
+  transition: color 0.2s;
+}
+.modal-close:hover { color: var(--text); }
+
+.modal-title {
+  font-family: var(--font-head);
+  font-size: 22px;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+.modal-sub {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+/* ── OAuth buttons ── */
+.oauth-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-h);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+  margin-bottom: 10px;
+}
+.oauth-btn:hover { background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.25); }
+.oauth-btn svg { flex-shrink: 0; }
+
+.modal-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+}
+.modal-divider::before, .modal-divider::after {
+  content: ''; flex: 1;
+  height: 1px; background: var(--border);
+}
+.modal-divider span { font-size: 12px; color: var(--muted); }
+
+/* ── Form fields ── */
+.form-field {
+  margin-bottom: 12px;
+}
+.form-label {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+  letter-spacing: 0.05em;
+}
+.form-input {
+  width: 100%;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+  padding: 11px 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.form-input:focus { border-color: rgba(124,106,247,0.5); }
+.form-input::placeholder { color: var(--muted); }
+
+.btn-submit {
+  width: 100%;
+  padding: 13px;
+  background: linear-gradient(135deg, var(--accent), #9b6af7);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 4px;
+  transition: all 0.2s;
+}
+.btn-submit:hover { opacity: 0.9; transform: translateY(-1px); }
+
+.modal-switch {
+  text-align: center;
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.modal-switch a { color: var(--accent); cursor: pointer; text-decoration: none; }
+.modal-switch a:hover { text-decoration: underline; }
+
+.form-error {
+  color: #f77676;
+  font-size: 12px;
+  margin-top: 10px;
+  text-align: center;
+  min-height: 18px;
+}
+
 .nav-queue {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -600,9 +787,90 @@ textarea:focus {
   <a class="nav-logo" href="/">NODA<span>.</span>PICS</a>
   <div class="nav-right">
     <span class="nav-queue"><span class="dot"></span><span id="queueTxt">—</span></span>
+    <span class="quota-badge" id="quotaBadge" style="display:none"></span>
+    <div id="navUser" style="display:none;align-items:center;gap:8px">
+      <img class="nav-avatar" id="navAvatar" src="" alt="" onclick="openUserMenu()">
+      <span class="nav-user-name" id="navUserName" onclick="openUserMenu()"></span>
+    </div>
+    <button class="nav-auth" id="navAuthBtn" onclick="openModal('login')" data-i18n="btnLogin">登录 / 注册</button>
     <button class="nav-lang" id="langBtn">EN</button>
   </div>
 </nav>
+
+<!-- Auth Modal -->
+<div class="modal-backdrop" id="authModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">×</button>
+
+    <!-- Login form -->
+    <div id="formLogin">
+      <div class="modal-title" data-i18n="loginTitle">欢迎回来</div>
+      <div class="modal-sub" data-i18n="loginSub">登录后每天可生成 10 张图片</div>
+
+      <a class="oauth-btn" href="/api/auth/google">
+        <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
+        <span data-i18n="oauthGoogle">使用 Google 登录</span>
+      </a>
+      <a class="oauth-btn" href="/api/auth/github">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        <span data-i18n="oauthGithub">使用 GitHub 登录</span>
+      </a>
+
+      <div class="modal-divider"><span data-i18n="orEmail">或邮箱登录</span></div>
+
+      <div class="form-field">
+        <label class="form-label" data-i18n="labelEmail">邮箱</label>
+        <input class="form-input" id="loginEmail" type="email" autocomplete="email" data-i18n-placeholder="placeholderEmail">
+      </div>
+      <div class="form-field">
+        <label class="form-label" data-i18n="labelPwd">密码</label>
+        <input class="form-input" id="loginPwd" type="password" autocomplete="current-password" data-i18n-placeholder="placeholderPwd">
+      </div>
+      <div class="form-error" id="loginErr"></div>
+      <button class="btn-submit" onclick="doLogin()" data-i18n="btnLoginSubmit">登录</button>
+      <div class="modal-switch">
+        <span data-i18n="noAccount">还没有账号？</span>
+        <a onclick="openModal('register')" data-i18n="toRegister">免费注册</a>
+      </div>
+    </div>
+
+    <!-- Register form -->
+    <div id="formRegister" style="display:none">
+      <div class="modal-title" data-i18n="regTitle">创建账号</div>
+      <div class="modal-sub" data-i18n="regSub">注册后每天可生成 10 张图片（游客仅限 3 张）</div>
+
+      <a class="oauth-btn" href="/api/auth/google">
+        <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
+        <span data-i18n="oauthGoogle">使用 Google 登录</span>
+      </a>
+      <a class="oauth-btn" href="/api/auth/github">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        <span data-i18n="oauthGithub">使用 GitHub 登录</span>
+      </a>
+
+      <div class="modal-divider"><span data-i18n="orEmail">或邮箱注册</span></div>
+
+      <div class="form-field">
+        <label class="form-label" data-i18n="labelName">昵称</label>
+        <input class="form-input" id="regName" type="text" data-i18n-placeholder="placeholderName">
+      </div>
+      <div class="form-field">
+        <label class="form-label" data-i18n="labelEmail">邮箱</label>
+        <input class="form-input" id="regEmail" type="email" autocomplete="email" data-i18n-placeholder="placeholderEmail">
+      </div>
+      <div class="form-field">
+        <label class="form-label" data-i18n="labelPwd">密码</label>
+        <input class="form-input" id="regPwd" type="password" autocomplete="new-password" data-i18n-placeholder="placeholderPwdNew">
+      </div>
+      <div class="form-error" id="regErr"></div>
+      <button class="btn-submit" onclick="doRegister()" data-i18n="btnRegSubmit">注册</button>
+      <div class="modal-switch">
+        <span data-i18n="hasAccount">已有账号？</span>
+        <a onclick="openModal('login')" data-i18n="toLogin">去登录</a>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- HERO -->
 <section class="hero fade-up" style="animation-delay:0.1s">
@@ -781,6 +1049,32 @@ const I18N = {
     errTimeout:   '任务超时（超过 6 分钟）',
     errFailed:    '生成失败：',
     langLabel:    'EN',
+    btnLogin:     '登录 / 注册',
+    loginTitle:   '欢迎回来',
+    loginSub:     '登录后每天可生成 10 张图片',
+    oauthGoogle:  '使用 Google 登录',
+    oauthGithub:  '使用 GitHub 登录',
+    orEmail:      '或邮箱登录',
+    labelEmail:   '邮箱',
+    labelPwd:     '密码',
+    labelName:    '昵称',
+    placeholderEmail: '你的邮箱',
+    placeholderPwd:   '密码',
+    placeholderPwdNew:'至少 6 位',
+    placeholderName:  '怎么称呼你',
+    btnLoginSubmit: '登录',
+    noAccount:    '还没有账号？',
+    toRegister:   '免费注册',
+    regTitle:     '创建账号',
+    regSub:       '注册后每天可生成 10 张图片（游客仅限 3 张）',
+    btnRegSubmit: '注册',
+    hasAccount:   '已有账号？',
+    toLogin:      '去登录',
+    menuLogout:   '退出登录',
+    quotaFmt:     '今日 {used}/{limit}',
+    errLoginFail: '邮箱或密码错误',
+    errRegFail:   '注册失败，请检查邮箱格式',
+    errEmailTaken:'该邮箱已注册，请直接登录',
   },
   en: {
     heroTag:      'AI Image Synthesis Engine',
@@ -810,6 +1104,32 @@ const I18N = {
     errTimeout:   'Timeout: job exceeded 6 minutes',
     errFailed:    'Failed: ',
     langLabel:    '中文',
+    btnLogin:     'Sign In',
+    loginTitle:   'Welcome back',
+    loginSub:     'Signed-in users get 10 generations per day',
+    oauthGoogle:  'Continue with Google',
+    oauthGithub:  'Continue with GitHub',
+    orEmail:      'or sign in with email',
+    labelEmail:   'Email',
+    labelPwd:     'Password',
+    labelName:    'Name',
+    placeholderEmail: 'your@email.com',
+    placeholderPwd:   'password',
+    placeholderPwdNew:'at least 6 characters',
+    placeholderName:  'what should we call you',
+    btnLoginSubmit: 'Sign in',
+    noAccount:    "Don't have an account?",
+    toRegister:   'Register free',
+    regTitle:     'Create account',
+    regSub:       'Free users get 10 generations/day (guests: 3)',
+    btnRegSubmit: 'Create account',
+    hasAccount:   'Already have an account?',
+    toLogin:      'Sign in',
+    menuLogout:   'Sign out',
+    quotaFmt:     '{used}/{limit} today',
+    errLoginFail: 'Invalid email or password',
+    errRegFail:   'Registration failed, check your email',
+    errEmailTaken:'Email already registered — sign in instead',
   },
 };
 
@@ -833,6 +1153,7 @@ function applyLang() {
     el.textContent = t(el.dataset.i18nPill);
   });
   document.getElementById('langBtn').textContent = t('langLabel');
+  document.getElementById('navAuthBtn').textContent = t('btnLogin');
 
   // Gallery use-prompt labels
   document.querySelectorAll('.gallery-use').forEach(el => {
@@ -897,9 +1218,17 @@ scroll.addEventListener('mousemove', e => {
 // ── Stats ────────────────────────────────────────────
 async function loadStats() {
   try {
-    const d = await fetch('/api/stats').then(r => r.json());
+    const headers = {};
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    const d = await fetch('/api/stats', { headers, credentials: 'include' }).then(r => r.json());
     document.getElementById('queueTxt').textContent =
       lang === 'zh' ? `队列 ${d.queue_len}/${d.queue_max}` : `Queue ${d.queue_len}/${d.queue_max}`;
+    if (d.quota) {
+      const badge = document.getElementById('quotaBadge');
+      badge.textContent = t('quotaFmt', { used: d.quota.used, limit: d.quota.limit });
+      badge.className   = 'quota-badge' + (d.quota.used >= d.quota.limit * 0.8 ? ' warn' : '');
+      badge.style.display = '';
+    }
   } catch { document.getElementById('queueTxt').textContent = '—'; }
 }
 
@@ -925,13 +1254,16 @@ async function generate() {
   showProgress();
 
   try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
     const r = await fetch('/api/jobs', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
+      credentials: 'include',
       body: JSON.stringify({ prompt: fullPrompt, style: selectedStyle }),
     });
 
-    if (r.status === 429) { reset(); showToast(t('errRate')); return; }
+    if (r.status === 429) { const d = await r.json(); reset(); showToast(d.message || t('errRate')); return; }
     if (r.status === 503) { reset(); showToast(t('errQueue')); return; }
     if (!r.ok) throw new Error(await r.text());
 
@@ -964,7 +1296,7 @@ function poll(jobId, queuePos) {
         hideProgress();
         showResult(d.image_url);
         setGenerating(false);
-        loadStats();
+        refreshUser();
       } else if (d.status === 'failed') {
         clearInterval(pollTimer);
         reset();
@@ -1023,8 +1355,174 @@ function showToast(msg) {
   setTimeout(() => el.classList.remove('show'), 4000);
 }
 
+// ── Auth ─────────────────────────────────────────────
+let authToken = localStorage.getItem('token') || null;
+
+function openModal(mode) {
+  document.getElementById('formLogin').style.display    = mode === 'login'    ? '' : 'none';
+  document.getElementById('formRegister').style.display = mode === 'register' ? '' : 'none';
+  document.getElementById('loginErr').textContent = '';
+  document.getElementById('regErr').textContent   = '';
+  document.getElementById('authModal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('authModal').classList.remove('open');
+}
+
+// Close on backdrop click
+document.getElementById('authModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('authModal')) closeModal();
+});
+
+// Keyboard ESC
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
+
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pwd   = document.getElementById('loginPwd').value;
+  const errEl = document.getElementById('loginErr');
+  errEl.textContent = '';
+
+  if (!email || !pwd) { errEl.textContent = t('errLoginFail'); return; }
+
+  try {
+    const r = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pwd }),
+    });
+    const d = await r.json();
+    if (!r.ok) { errEl.textContent = t('errLoginFail'); return; }
+    authToken = d.token;
+    localStorage.setItem('token', authToken);
+    closeModal();
+    await refreshUser();
+  } catch {
+    errEl.textContent = t('errConn') + 'login';
+  }
+}
+
+// Allow Enter key in login form
+document.getElementById('loginPwd').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+async function doRegister() {
+  const name  = document.getElementById('regName').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  const pwd   = document.getElementById('regPwd').value;
+  const errEl = document.getElementById('regErr');
+  errEl.textContent = '';
+
+  if (!email || !pwd) { errEl.textContent = t('errRegFail'); return; }
+
+  try {
+    const r = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pwd, name }),
+    });
+    const d = await r.json();
+    if (r.status === 409) { errEl.textContent = t('errEmailTaken'); return; }
+    if (!r.ok) { errEl.textContent = d.error || t('errRegFail'); return; }
+    authToken = d.token;
+    localStorage.setItem('token', authToken);
+    closeModal();
+    await refreshUser();
+  } catch {
+    errEl.textContent = t('errConn') + 'register';
+  }
+}
+
+// Allow Enter key in register form
+document.getElementById('regPwd').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doRegister();
+});
+
+function updateNavUser(user, quota) {
+  const navAuthBtn = document.getElementById('navAuthBtn');
+  const navUser    = document.getElementById('navUser');
+  const navAvatar  = document.getElementById('navAvatar');
+  const navName    = document.getElementById('navUserName');
+  const badge      = document.getElementById('quotaBadge');
+
+  if (user) {
+    navAuthBtn.style.display = 'none';
+    navUser.style.display    = 'flex';
+    navAvatar.src = user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email)}&background=7c6af7&color=fff&size=60`;
+    navName.textContent = user.name || user.email.split('@')[0];
+
+    if (quota) {
+      const warn = quota.used >= quota.limit * 0.8;
+      badge.textContent = t('quotaFmt', { used: quota.used, limit: quota.limit });
+      badge.className   = 'quota-badge' + (warn ? ' warn' : '');
+      badge.style.display = '';
+    }
+  } else {
+    navAuthBtn.style.display = '';
+    navUser.style.display    = 'none';
+    if (quota) {
+      badge.textContent = t('quotaFmt', { used: quota.used, limit: quota.limit });
+      badge.className   = 'quota-badge' + (quota.used >= quota.limit ? ' warn' : '');
+      badge.style.display = '';
+    }
+  }
+}
+
+function openUserMenu() {
+  if (confirm(t('menuLogout') + '?')) {
+    authToken = null;
+    localStorage.removeItem('token');
+    updateNavUser(null, null);
+    document.getElementById('quotaBadge').style.display = 'none';
+    loadStats();
+  }
+}
+
+async function refreshUser() {
+  if (!authToken) { updateNavUser(null, null); loadStats(); return; }
+  try {
+    const [meRes, statsRes] = await Promise.all([
+      fetch('/api/auth/me', { headers: { Authorization: `Bearer ${authToken}` } }),
+      fetch('/api/stats',   { headers: { Authorization: `Bearer ${authToken}` } }),
+    ]);
+    const me    = await meRes.json();
+    const stats = await statsRes.json();
+
+    if (!me.user) {
+      // Token invalid/expired
+      authToken = null;
+      localStorage.removeItem('token');
+      updateNavUser(null, stats.quota);
+    } else {
+      updateNavUser(me.user, stats.quota);
+    }
+
+    // Update queue text
+    document.getElementById('queueTxt').textContent =
+      lang === 'zh' ? `队列 ${stats.queue_len}/${stats.queue_max}` : `Queue ${stats.queue_len}/${stats.queue_max}`;
+  } catch { /* ignore */ }
+}
+
 // ── Init ─────────────────────────────────────────────
 applyLang();
+
+// Handle OAuth redirect (?login=ok sets cookie, just refresh user)
+if (new URLSearchParams(location.search).get('login') === 'ok') {
+  history.replaceState({}, '', '/');
+  // Token comes via HttpOnly cookie — fetch /me to confirm
+  fetch('/api/auth/me', { credentials: 'include' })
+    .then(r => r.json())
+    .then(d => {
+      if (d.user) updateNavUser(d.user, null);
+    });
+} else {
+  refreshUser();
+}
+
 loadStats();
 setInterval(loadStats, 30000);
 </script>
