@@ -372,19 +372,12 @@ body::before {
 }
 
 .gallery-scroll {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
-  overflow-x: auto;
-  padding-bottom: 16px;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  cursor: grab;
 }
-.gallery-scroll::-webkit-scrollbar { display: none; }
-.gallery-scroll:active { cursor: grabbing; }
 
 .gallery-card {
-  flex: 0 0 260px;
   border-radius: 12px;
   overflow: hidden;
   position: relative;
@@ -776,7 +769,7 @@ textarea:focus {
   .hero { padding: 120px 20px 60px; }
   .gallery-section { padding: 0 20px 60px; }
   .panel { padding: 24px 20px; }
-  .gallery-card { flex: 0 0 200px; }
+  .gallery-scroll { grid-template-columns: repeat(2, 1fr); }
 }
 </style>
 </head>
@@ -1200,19 +1193,6 @@ document.getElementById('galleryScroll').addEventListener('click', e => {
     selectedStyle = style;
   }
   document.querySelector('.main').scrollIntoView({ behavior: 'smooth' });
-});
-
-// ── Gallery drag scroll ──────────────────────────────
-const scroll = document.getElementById('galleryScroll');
-let isDown = false, startX, scrollLeft;
-scroll.addEventListener('mousedown', e => { isDown = true; startX = e.pageX - scroll.offsetLeft; scrollLeft = scroll.scrollLeft; });
-scroll.addEventListener('mouseleave', () => isDown = false);
-scroll.addEventListener('mouseup', () => isDown = false);
-scroll.addEventListener('mousemove', e => {
-  if (!isDown) return;
-  e.preventDefault();
-  const x = e.pageX - scroll.offsetLeft;
-  scroll.scrollLeft = scrollLeft - (x - startX) * 1.5;
 });
 
 // ── Stats ────────────────────────────────────────────
