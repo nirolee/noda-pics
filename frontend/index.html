@@ -374,7 +374,9 @@ body::before {
 .gallery-scroll {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  gap: 12px;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .gallery-card {
@@ -395,7 +397,7 @@ body::before {
 
 .gallery-img {
   width: 100%;
-  aspect-ratio: 3/4;
+  aspect-ratio: 3/2;
   object-fit: cover;
   display: block;
   background: linear-gradient(135deg, #1a1b2e 0%, #0f0f1a 100%);
