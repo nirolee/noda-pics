@@ -16,8 +16,8 @@ import urllib.request
 # ── 配置 ──────────────────────────────────────────────
 DB_HOST     = "YOUR_DB_HOST"
 DB_PORT     = 3306
-DB_USER     = "root"
-DB_PASS     = ""
+DB_USER     = "noda_pics"
+DB_PASS     = "REDACTED_DB_PASS"
 DB_NAME     = "noda_pics"
 
 COMFY_URL   = "http://127.0.0.1:8188"

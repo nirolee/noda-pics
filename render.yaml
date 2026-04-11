@@ -13,9 +13,9 @@ services:
       - key: DB_PORT
         value: 3306
       - key: DB_USER
-        value: root
+        value: noda_pics
       - key: DB_PASS
-        value: ""
+        value: "REDACTED_DB_PASS"
       - key: DB_NAME
         value: noda_pics
       - key: RATE_LIMIT
