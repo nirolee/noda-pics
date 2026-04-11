@@ -8,17 +8,17 @@ services:
     startCommand: cd api && gunicorn -w 2 -b 0.0.0.0:$PORT app:app
     healthCheckPath: /health
     envVars:
-      - key: REDIS_URL
-        value: redis://:eRJSPCWCydrkP6f6@YOUR_DB_HOST:6379/0
-      - key: API_KEY
-        sync: false          # 在 Render 后台手动填：8ea235c73b763162a61155c3c20146336d3dd46a464356d9
-      - key: IMAGE_DIR
-        value: /var/www/noda-pics/images   # 223 上的图片目录
-      - key: IMAGE_BASE
-        value: https://img.noda.pics       # 图片 CDN 域名（指向 223）
+      - key: DB_HOST
+        value: YOUR_DB_HOST
+      - key: DB_PORT
+        value: 3306
+      - key: DB_USER
+        value: root
+      - key: DB_PASS
+        value: ""
+      - key: DB_NAME
+        value: noda_pics
       - key: RATE_LIMIT
         value: 5
       - key: QUEUE_MAX
         value: 20
-      - key: JOB_TTL
-        value: 86400

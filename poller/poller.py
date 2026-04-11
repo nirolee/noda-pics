@@ -1,28 +1,32 @@
 #!/usr/bin/env python3
 """
 noda.pics 本地 Poller
-轮询 223 Job API → 调 ComfyUI 生成图片 → 上传结果
-纯 stdlib，无需安装额外依赖
+直连 223 MySQL → 取 pending 任务 → ComfyUI 生图 → SCP 到 223 → 更新 DB
 """
 import time
 import json
 import uuid
-import urllib.request
-import urllib.error
+import subprocess
 import logging
 import sys
+import os
+import tempfile
+import urllib.request
 
 # ── 配置 ──────────────────────────────────────────────
-API_BASE    = "https://noda-pics.onrender.com"   # Render 部署后的 URL，上线后更新
-API_KEY     = "8ea235c73b763162a61155c3c20146336d3dd46a464356d9"
+DB_HOST     = "YOUR_DB_HOST"
+DB_PORT     = 3306
+DB_USER     = "root"
+DB_PASS     = ""
+DB_NAME     = "noda_pics"
+
 COMFY_URL   = "http://127.0.0.1:8188"
-POLL_EVERY  = 5    # 没任务时的等待秒数（同时 keep-alive Render 服务）
+POLL_EVERY  = 5      # 没任务时等待秒数
 IMG_W       = 768
 IMG_H       = 512
-# 图片直传 223
 IMG_SERVER  = "root@YOUR_DB_HOST"
 IMG_DIR_223 = "/var/www/noda-pics/images"
-IMG_BASE    = "https://img.noda.pics"            # 223 nginx 图片 CDN 域名
+IMG_BASE    = "https://img.noda.pics"
 # ──────────────────────────────────────────────────────
 
 logging.basicConfig(
@@ -32,69 +36,81 @@ logging.basicConfig(
     handlers=[
         logging.StreamHandler(sys.stdout),
         logging.FileHandler("poller.log", encoding="utf-8"),
-    ]
+    ],
 )
 log = logging.getLogger(__name__)
 
+try:
+    import pymysql
+    import pymysql.cursors
+except ImportError:
+    log.error("请先安装 pymysql: pip install pymysql")
+    sys.exit(1)
 
-# ── 223 API helpers ───────────────────────────────────
 
-def api_get(path: str) -> dict:
-    req = urllib.request.Request(
-        f"{API_BASE}{path}",
-        headers={"Authorization": f"Bearer {API_KEY}"}
+# ── DB 工具 ───────────────────────────────────────────
+
+def get_db():
+    return pymysql.connect(
+        host=DB_HOST, port=DB_PORT,
+        user=DB_USER, password=DB_PASS,
+        database=DB_NAME,
+        charset="utf8mb4",
+        cursorclass=pymysql.cursors.DictCursor,
+        connect_timeout=5,
+        autocommit=True,
     )
-    resp = urllib.request.urlopen(req, timeout=10)
-    return json.loads(resp.read())
 
 
-def api_put_url(path: str, image_url: str) -> dict:
-    """告诉 Render API 图片已存好，给出 URL"""
-    payload = json.dumps({"image_url": image_url}).encode()
-    req = urllib.request.Request(
-        f"{API_BASE}{path}",
-        data=payload,
-        method="PUT",
-        headers={
-            "Authorization": f"Bearer {API_KEY}",
-            "Content-Type": "application/json",
-        }
-    )
-    resp = urllib.request.urlopen(req, timeout=15)
-    return json.loads(resp.read())
-
-
-def scp_to_223(local_path: str, filename: str) -> str:
-    """把图片 SCP 到 223，返回公开 URL"""
-    import subprocess
-    remote = f"{IMG_SERVER}:{IMG_DIR_223}/{filename}"
-    result = subprocess.run(
-        ["scp", local_path, remote],
-        capture_output=True, timeout=30
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"SCP 失败: {result.stderr.decode()}")
-    return f"{IMG_BASE}/{filename}"
-
-
-def api_report_error(job_id: str, msg: str):
+def fetch_next_job() -> dict | None:
+    """原子性地取出一个 pending 任务并标记为 processing"""
+    db = get_db()
     try:
-        payload = json.dumps({"error": msg[:200]}).encode()
-        req = urllib.request.Request(
-            f"{API_BASE}/api/jobs/{job_id}/error",
-            data=payload,
-            method="PUT",
-            headers={
-                "Authorization": f"Bearer {API_KEY}",
-                "Content-Type": "application/json",
-            }
-        )
-        urllib.request.urlopen(req, timeout=10)
-    except Exception:
-        pass
+        with db.cursor() as cur:
+            # 用 UPDATE + SELECT 避免并发重复消费（本地单进程问题不大，但好习惯）
+            cur.execute(
+                "SELECT id, prompt, style FROM jobs "
+                "WHERE status = 'pending' ORDER BY created_at LIMIT 1"
+            )
+            job = cur.fetchone()
+            if not job:
+                return None
+            cur.execute(
+                "UPDATE jobs SET status = 'processing', started_at = NOW() WHERE id = %s AND status = 'pending'",
+                (job["id"],)
+            )
+            if cur.rowcount == 0:
+                return None  # 被别的进程抢走了（理论上不会）
+            return job
+    finally:
+        db.close()
 
 
-# ── ComfyUI helpers ───────────────────────────────────
+def mark_done(job_id: str, image_url: str):
+    db = get_db()
+    try:
+        with db.cursor() as cur:
+            cur.execute(
+                "UPDATE jobs SET status = 'done', done_at = NOW(), image_url = %s WHERE id = %s",
+                (image_url, job_id)
+            )
+    finally:
+        db.close()
+
+
+def mark_failed(job_id: str, error: str):
+    db = get_db()
+    try:
+        with db.cursor() as cur:
+            cur.execute(
+                "UPDATE jobs SET status = 'failed', done_at = NOW(), error = %s WHERE id = %s",
+                (error[:500], job_id)
+            )
+    finally:
+        db.close()
+
+
+# ── ComfyUI ───────────────────────────────────────────
 
 def build_workflow(prompt_text: str) -> dict:
     seed = int(time.time() * 1000) % (2 ** 31)
@@ -129,21 +145,17 @@ def build_workflow(prompt_text: str) -> dict:
 def comfy_generate(prompt_text: str) -> bytes:
     """提交任务到 ComfyUI，等待完成，返回图片字节"""
     client_id = str(uuid.uuid4())
-    workflow  = build_workflow(prompt_text)
+    payload   = json.dumps({"prompt": build_workflow(prompt_text), "client_id": client_id}).encode()
 
-    # 提交
-    payload = json.dumps({"prompt": workflow, "client_id": client_id}).encode()
     req = urllib.request.Request(
-        f"{COMFY_URL}/prompt",
-        data=payload,
+        f"{COMFY_URL}/prompt", data=payload,
         headers={"Content-Type": "application/json"}
     )
-    resp = urllib.request.urlopen(req, timeout=15)
+    resp      = urllib.request.urlopen(req, timeout=15)
     prompt_id = json.loads(resp.read())["prompt_id"]
     log.info(f"  → ComfyUI prompt_id: {prompt_id[:8]}...")
 
-    # 等待完成（最多 5 分钟）
-    for i in range(150):
+    for i in range(150):  # 最多等 5 分钟
         time.sleep(2)
         hist = json.loads(
             urllib.request.urlopen(f"{COMFY_URL}/history/{prompt_id}", timeout=10).read()
@@ -151,20 +163,23 @@ def comfy_generate(prompt_text: str) -> bytes:
         if prompt_id in hist:
             for node_out in hist[prompt_id].get("outputs", {}).values():
                 if "images" in node_out:
-                    img_info  = node_out["images"][0]
-                    filename  = img_info["filename"]
-                    subfolder = img_info.get("subfolder", "")
-                    params    = f"filename={filename}&subfolder={subfolder}&type=output"
-                    img_bytes = urllib.request.urlopen(
-                        f"{COMFY_URL}/view?{params}", timeout=15
-                    ).read()
+                    info      = node_out["images"][0]
+                    params    = f"filename={info['filename']}&subfolder={info.get('subfolder','')}&type=output"
+                    img_bytes = urllib.request.urlopen(f"{COMFY_URL}/view?{params}", timeout=15).read()
                     log.info(f"  ← 生成完成，{len(img_bytes)//1024} KB")
                     return img_bytes
-
         if i % 5 == 4:
             log.info(f"  ... 等待 {(i+1)*2}s")
 
     raise TimeoutError("ComfyUI 超时（5分钟）")
+
+
+def scp_to_223(local_path: str, filename: str) -> str:
+    remote = f"{IMG_SERVER}:{IMG_DIR_223}/{filename}"
+    result = subprocess.run(["scp", local_path, remote], capture_output=True, timeout=30)
+    if result.returncode != 0:
+        raise RuntimeError(f"SCP 失败: {result.stderr.decode()}")
+    return f"{IMG_BASE}/{filename}"
 
 
 # ── 主处理流程 ─────────────────────────────────────────
@@ -174,29 +189,24 @@ def process_job(job: dict):
     prompt = job["prompt"]
     log.info(f"▶ job {job_id[:8]}  prompt: {prompt[:80]}")
 
-    import tempfile, os
     tmp_file = None
     try:
         img_bytes = comfy_generate(prompt)
 
-        # 存到本地临时文件
         filename = f"{job_id}.png"
         tmp_file = os.path.join(tempfile.gettempdir(), filename)
         with open(tmp_file, "wb") as f:
             f.write(img_bytes)
 
-        # SCP 到 223
-        log.info(f"  SCP 图片到 223...")
+        log.info("  SCP 图片到 223...")
         image_url = scp_to_223(tmp_file, filename)
 
-        # 通知 Render API
-        log.info(f"  通知 API: {image_url}")
-        api_put_url(f"/api/jobs/{job_id}/result", image_url)
-        log.info(f"  ✓ done")
+        mark_done(job_id, image_url)
+        log.info(f"  ✓ done → {image_url}")
 
     except Exception as e:
         log.error(f"  ✗ 失败: {e}")
-        api_report_error(job_id, str(e))
+        mark_failed(job_id, str(e))
     finally:
         if tmp_file and os.path.exists(tmp_file):
             os.remove(tmp_file)
@@ -207,23 +217,21 @@ def process_job(job: dict):
 def main():
     log.info("=" * 48)
     log.info("noda.pics Poller 启动")
-    log.info(f"  API   : {API_BASE}")
+    log.info(f"  DB    : {DB_HOST}/{DB_NAME}")
     log.info(f"  ComfyUI: {COMFY_URL}")
     log.info(f"  间隔  : {POLL_EVERY}s")
     log.info("=" * 48)
 
     while True:
         try:
-            data = api_get("/api/jobs/next")
-            job  = data.get("job")
-
+            job = fetch_next_job()
             if job:
                 process_job(job)
             else:
                 time.sleep(POLL_EVERY)
 
-        except urllib.error.URLError as e:
-            log.warning(f"网络错误: {e} — 10s 后重试")
+        except pymysql.Error as e:
+            log.warning(f"DB 错误: {e} — 10s 后重试")
             time.sleep(10)
 
         except KeyboardInterrupt:
