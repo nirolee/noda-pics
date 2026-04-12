@@ -411,6 +411,23 @@ def get_job_status(job_id: str):
     return jsonify(resp)
 
 
+@app.get("/api/debug-auth")
+def debug_auth():
+    """临时调试接口，上线后删除"""
+    auth_header = request.headers.get("Authorization", "")
+    cookie_token = request.cookies.get("token", "")
+    user = current_user()
+    token_to_decode = cookie_token or (auth_header[7:] if auth_header.startswith("Bearer ") else "")
+    decoded_id = decode_token(token_to_decode) if token_to_decode else None
+    return jsonify({
+        "has_auth_header": bool(auth_header),
+        "has_cookie": bool(cookie_token),
+        "cookie_preview": cookie_token[:20] + "..." if cookie_token else None,
+        "decoded_user_id": decoded_id,
+        "current_user": user["id"] if user else None,
+    })
+
+
 @app.get("/api/stats")
 def stats():
     user = current_user()
