@@ -1477,7 +1477,7 @@ function openUpgrade(reason) {
   } else {
     sub.textContent = lang === 'zh' ? '解锁更多生成次数，尽情创作' : 'Unlock more generations.';
   }
-  if (!authToken) {
+  if (!currentUser) {
     btn.style.display  = 'none';
     hint.style.display = '';
   } else {
@@ -1521,7 +1521,8 @@ async function doCheckout() {
 }
 
 // ── Auth ─────────────────────────────────────────────
-let authToken = localStorage.getItem('token') || null;
+let authToken   = localStorage.getItem('token') || null;
+let currentUser = null;  // 登录后的用户对象（兼容 cookie 和 localStorage）
 
 function openModal(mode) {
   document.getElementById('formLogin').style.display    = mode === 'login'    ? '' : 'none';
@@ -1614,6 +1615,8 @@ function updateNavUser(user, quota) {
   const navName    = document.getElementById('navUserName');
   const badge      = document.getElementById('quotaBadge');
 
+  currentUser = user || null;
+
   if (user) {
     navAuthBtn.style.display = 'none';
     navUser.style.display    = 'flex';
@@ -1643,7 +1646,8 @@ function updateNavUser(user, quota) {
 
 function openUserMenu() {
   if (confirm(t('menuLogout') + '?')) {
-    authToken = null;
+    authToken   = null;
+    currentUser = null;
     localStorage.removeItem('token');
     updateNavUser(null, null);
     document.getElementById('quotaBadge').style.display = 'none';
