@@ -61,7 +61,7 @@ def get_db():
 # ─── JWT 工具 ───
 def make_token(user_id: int) -> str:
     payload = {
-        "sub": user_id,
+        "sub": str(user_id),   # PyJWT 2.x 要求 sub 为字符串
         "exp": datetime.now(timezone.utc) + timedelta(minutes=JWT_EXPIRE),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
@@ -70,7 +70,7 @@ def make_token(user_id: int) -> str:
 def decode_token(token: str) -> int | None:
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-        return payload["sub"]
+        return int(payload["sub"])   # 转回 int
     except Exception:
         return None
 
