@@ -414,16 +414,33 @@ def get_job_status(job_id: str):
 @app.get("/api/debug-auth")
 def debug_auth():
     """临时调试接口，上线后删除"""
-    auth_header = request.headers.get("Authorization", "")
+    auth_header  = request.headers.get("Authorization", "")
     cookie_token = request.cookies.get("token", "")
-    user = current_user()
+
+    # 自测：立即签发一个 token 再解码，验证 JWT 本身是否正常
+    self_test_token  = make_token(1)
+    self_test_decode = decode_token(self_test_token)
+
+    # 尝试解码实际收到的 token
     token_to_decode = cookie_token or (auth_header[7:] if auth_header.startswith("Bearer ") else "")
-    decoded_id = decode_token(token_to_decode) if token_to_decode else None
+    decoded_id = None
+    decode_error = None
+    if token_to_decode:
+        try:
+            payload = jwt.decode(token_to_decode, JWT_SECRET, algorithms=["HS256"])
+            decoded_id = payload.get("sub")
+        except Exception as e:
+            decode_error = str(e)
+
+    user = current_user()
     return jsonify({
+        "jwt_self_test": self_test_decode,          # 应该是 1
+        "jwt_secret_len": len(JWT_SECRET),          # secret 长度
         "has_auth_header": bool(auth_header),
         "has_cookie": bool(cookie_token),
         "cookie_preview": cookie_token[:20] + "..." if cookie_token else None,
         "decoded_user_id": decoded_id,
+        "decode_error": decode_error,
         "current_user": user["id"] if user else None,
     })
 
