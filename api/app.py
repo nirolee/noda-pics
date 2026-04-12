@@ -510,33 +510,56 @@ def payment_success():
 @app.post("/api/payment/webhook")
 def payment_webhook():
     payload = request.get_data()
-    sig     = request.headers.get("x-creem-signature", "")
+    sig     = request.headers.get("creem-signature", "")
 
     if CREEM_WEBHOOK_SEC:
         expected = hmac.new(CREEM_WEBHOOK_SEC.encode(), payload, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(sig, expected):
+            app.logger.warning(f"[webhook] invalid_signature sig={sig!r} expected={expected!r}")
             return jsonify({"error": "invalid_signature"}), 401
 
     event      = request.get_json(silent=True) or {}
-    event_type = event.get("type", "")
-    data       = event.get("data", {})
+    # Creem 有两种格式：{ type, data } 或 { eventType, object }
+    event_type = event.get("type") or event.get("eventType", "")
+    data       = event.get("data") or event.get("object") or {}
 
-    if event_type == "checkout.completed":
+    def _activate_pro(user_id, sub_id, cust_id):
+        expires_at = datetime.now() + timedelta(days=31)
+        with get_db() as db:
+            with db.cursor() as cur:
+                cur.execute(
+                    "UPDATE users SET plan='pro', plan_expires_at=%s, "
+                    "creem_subscription_id=%s, creem_customer_id=%s WHERE id=%s",
+                    (expires_at, sub_id or "", cust_id or "", user_id)
+                )
+
+    if event_type in ("checkout.completed", "subscription.active"):
         meta    = data.get("metadata") or {}
         user_id = meta.get("user_id")
-        sub_id  = data.get("subscription_id", "")
-        cust_id = data.get("customer_id", "")
+        sub_id  = data.get("subscription_id") or data.get("id", "")
+        cust_id = (data.get("customer") or {}).get("id") or data.get("customer_id", "")
         if user_id:
-            expires_at = datetime.now() + timedelta(days=31)
+            _activate_pro(user_id, sub_id, cust_id)
+
+    elif event_type == "subscription.update":
+        # status=active 时激活 Pro
+        status  = data.get("status", "")
+        meta    = data.get("metadata") or {}
+        user_id = meta.get("user_id")
+        sub_id  = data.get("id", "")
+        cust_id = (data.get("customer") or {}).get("id", "")
+        if status == "active" and user_id:
+            _activate_pro(user_id, sub_id, cust_id)
+        elif status in ("active",) and not user_id:
+            # 按 subscription_id 查用户
             with get_db() as db:
                 with db.cursor() as cur:
-                    cur.execute(
-                        "UPDATE users SET plan='pro', plan_expires_at=%s, "
-                        "creem_subscription_id=%s, creem_customer_id=%s WHERE id=%s",
-                        (expires_at, sub_id, cust_id, user_id)
-                    )
+                    cur.execute("SELECT id FROM users WHERE creem_subscription_id=%s", (sub_id,))
+                    row = cur.fetchone()
+            if row:
+                _activate_pro(row["id"], sub_id, cust_id)
 
-    elif event_type == "subscription.renewed":
+    elif event_type in ("subscription.renewed", "subscription.updated"):
         sub_id = data.get("subscription_id") or data.get("id", "")
         if sub_id:
             expires_at = datetime.now() + timedelta(days=31)
@@ -548,10 +571,7 @@ def payment_webhook():
                     )
 
     elif event_type == "subscription.cancelled":
-        sub_id = data.get("subscription_id") or data.get("id", "")
-        if sub_id:
-            # 不立即降级，等 plan_expires_at 自然到期
-            pass
+        pass  # 不立即降级，等 plan_expires_at 自然到期
 
     return jsonify({"status": "ok"})
 
