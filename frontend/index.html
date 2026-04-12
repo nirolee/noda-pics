@@ -1661,6 +1661,7 @@ async function refreshUser() {
     ]);
     const me    = await meRes.json();
     const stats = await statsRes.json();
+    console.log('[auth] me=', me, 'stats=', stats);
 
     if (!me.user) {
       authToken = null;
@@ -1672,7 +1673,7 @@ async function refreshUser() {
 
     document.getElementById('queueTxt').textContent =
       lang === 'zh' ? `队列 ${stats.queue_len}/${stats.queue_max}` : `Queue ${stats.queue_len}/${stats.queue_max}`;
-  } catch { /* ignore */ }
+  } catch(e) { console.error('[refreshUser]', e); }
 }
 
 // ── Init ─────────────────────────────────────────────
