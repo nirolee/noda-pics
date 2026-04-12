@@ -80,7 +80,9 @@ def current_user() -> dict | None:
     token = None
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
-        token = auth[7:]
+        candidate = auth[7:]
+        if decode_token(candidate):   # 只有能解码才用，否则回退到 cookie
+            token = candidate
     if not token:
         token = request.cookies.get("token")
     if not token:
