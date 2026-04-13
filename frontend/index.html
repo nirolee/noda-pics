@@ -1010,79 +1010,6 @@ textarea:focus {
 <section class="gallery-section fade-up" style="animation-delay:0.25s">
   <div class="gallery-label" data-i18n="galleryLabel">// 示例作品 · 点击使用</div>
   <div class="gallery-scroll" id="galleryScroll">
-
-    <div class="gallery-card" data-prompt="a lone astronaut standing on the edge of a red canyon, vast alien sky with twin moons rising, ancient stone ruins in the distance" data-style="retro-scifi">
-      <img class="gallery-img" src="https://img.noda.pics/c8735d04-548a-4495-a40b-555fadd551cb.png" loading="lazy" alt="retro scifi">
-      <div class="gallery-style-tag">复古科幻</div>
-      <div class="gallery-overlay">
-        <div class="gallery-prompt">a lone astronaut standing on the edge of a red canyon, vast alien sky with twin moons rising</div>
-        <div class="gallery-use">→ 使用此提示词</div>
-      </div>
-    </div>
-
-    <div class="gallery-card" data-prompt="ancient Japanese shrine hidden in a misty bamboo forest at dawn, golden light filtering through leaves, koi pond reflection" data-style="ukiyo-e">
-      <img class="gallery-img" src="https://img.noda.pics/d2823f9b-2d18-4690-8d30-ae2501972a06.png" loading="lazy" alt="ukiyo-e">
-      <div class="gallery-style-tag">浮世绘</div>
-      <div class="gallery-overlay">
-        <div class="gallery-prompt">ancient Japanese shrine hidden in a misty bamboo forest at dawn, golden light filtering through leaves</div>
-        <div class="gallery-use">→ 使用此提示词</div>
-      </div>
-    </div>
-
-    <div class="gallery-card" data-prompt="cyberpunk street market at night, neon reflections on wet pavement, steam rising from food stalls, crowded and vibrant" data-style="default">
-      <img class="gallery-img" src="https://img.noda.pics/b4f2592e-51a5-4bc9-8f06-5b8351e48720.png" loading="lazy" alt="standard">
-      <div class="gallery-style-tag">标准</div>
-      <div class="gallery-overlay">
-        <div class="gallery-prompt">cyberpunk street market at night, neon reflections on wet pavement, steam rising from food stalls</div>
-        <div class="gallery-use">→ 使用此提示词</div>
-      </div>
-    </div>
-
-    <div class="gallery-card" data-prompt="oil painting portrait of an old fisherman, weathered face full of stories, stormy sea behind him, rembrandt lighting" data-style="oil-painting">
-      <img class="gallery-img" src="https://img.noda.pics/8d83efb7-aaba-4132-ba6d-e07f203d4563.png" loading="lazy" alt="oil painting">
-      <div class="gallery-style-tag">油画</div>
-      <div class="gallery-overlay">
-        <div class="gallery-prompt">oil painting portrait of an old fisherman, weathered face full of stories, stormy sea behind him, rembrandt lighting</div>
-        <div class="gallery-use">→ 使用此提示词</div>
-      </div>
-    </div>
-
-    <div class="gallery-card" data-prompt="a tiny house on a floating island in the clouds, surrounded by waterfalls and rainbow bridges, studio ghibli style" data-style="ghibli">
-      <img class="gallery-img" src="https://img.noda.pics/c036a8e6-eb4c-439b-b16b-133f944be920.png" loading="lazy" alt="ghibli">
-      <div class="gallery-style-tag">吉卜力</div>
-      <div class="gallery-overlay">
-        <div class="gallery-prompt">a tiny house on a floating island in the clouds, surrounded by waterfalls and rainbow bridges, studio ghibli style</div>
-        <div class="gallery-use">→ 使用此提示词</div>
-      </div>
-    </div>
-
-    <div class="gallery-card" data-prompt="deep sea bioluminescent creatures in the abyss, ethereal blue and purple glow, jellyfish the size of buildings" data-style="default">
-      <img class="gallery-img" src="https://img.noda.pics/c9568c5c-6035-4000-a6df-5a922aaccf98.png" loading="lazy" alt="deep sea">
-      <div class="gallery-style-tag">标准</div>
-      <div class="gallery-overlay">
-        <div class="gallery-prompt">deep sea bioluminescent creatures in the abyss, ethereal blue and purple glow, jellyfish the size of buildings</div>
-        <div class="gallery-use">→ 使用此提示词</div>
-      </div>
-    </div>
-
-    <div class="gallery-card" data-prompt="retro 1960s space race poster, rocket launching from earth, bold typography, limited color palette of red and gold" data-style="retro-scifi">
-      <img class="gallery-img" src="https://img.noda.pics/d7c3ecb3-a0d2-4523-b6c7-67d704c15e72.png" loading="lazy" alt="space poster">
-      <div class="gallery-style-tag">复古科幻</div>
-      <div class="gallery-overlay">
-        <div class="gallery-prompt">retro 1960s space race poster, rocket launching from earth, bold typography, limited color palette of red and gold</div>
-        <div class="gallery-use">→ 使用此提示词</div>
-      </div>
-    </div>
-
-    <div class="gallery-card" data-prompt="cherry blossom festival by the riverside, lanterns floating on water, mountain silhouette at dusk, peaceful atmosphere" data-style="ukiyo-e">
-      <img class="gallery-img" src="https://img.noda.pics/e25b7ccd-f1c2-4319-b4bf-f4c6a1812de1.png" loading="lazy" alt="cherry blossom">
-      <div class="gallery-style-tag">浮世绘</div>
-      <div class="gallery-overlay">
-        <div class="gallery-prompt">cherry blossom festival by the riverside, lanterns floating on water, mountain silhouette at dusk</div>
-        <div class="gallery-use">→ 使用此提示词</div>
-      </div>
-    </div>
-
   </div>
 </section>
 
@@ -1655,6 +1582,36 @@ function openUserMenu() {
   }
 }
 
+async function loadGallery() {
+  const container = document.getElementById('galleryScroll');
+  if (!container) return;
+  const styleNames = { 'default':'标准','ukiyo-e':'浮世绘','ghibli':'吉卜力','oil-painting':'油画','retro-scifi':'复古科幻','vintage':'复古','anime':'动漫','watercolor':'水彩' };
+  try {
+    const res = await fetch('/api/gallery');
+    const { images } = await res.json();
+    if (!images || images.length === 0) return;
+    container.innerHTML = images.map(img => `
+      <div class="gallery-card" data-prompt="${img.prompt.replace(/"/g,'&quot;')}" data-style="${img.style}">
+        <img class="gallery-img" src="${img.url}" loading="lazy" alt="${img.style}">
+        <div class="gallery-style-tag">${styleNames[img.style] || img.style}</div>
+        <div class="gallery-overlay">
+          <div class="gallery-prompt">${img.prompt.slice(0,80)}${img.prompt.length>80?'…':''}</div>
+          <div class="gallery-use">→ 使用此提示词</div>
+        </div>
+      </div>`).join('');
+    // re-bind click events
+    container.querySelectorAll('.gallery-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const p = card.dataset.prompt, s = card.dataset.style;
+        document.getElementById('prompt').value = p;
+        const btn = document.querySelector(`.style-btn[data-style="${s}"]`);
+        if (btn) btn.click();
+        document.getElementById('prompt').scrollIntoView({ behavior: 'smooth' });
+      });
+    });
+  } catch(e) { console.error('[gallery]', e); }
+}
+
 async function refreshUser() {
   try {
     const headers = {};
@@ -1692,6 +1649,7 @@ if (_params.get('login') === 'ok' || _params.get('payment') === 'success') {
   }
 }
 refreshUser();
+loadGallery();
 
 loadStats();
 setInterval(loadStats, 30000);

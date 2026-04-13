@@ -445,6 +445,23 @@ def debug_auth():
     })
 
 
+@app.get("/api/gallery")
+def gallery():
+    """返回最近完成的图片供首页展示"""
+    with get_db() as db:
+        with db.cursor() as cur:
+            cur.execute(
+                "SELECT image_url, prompt, style FROM jobs "
+                "WHERE status='done' AND image_url IS NOT NULL "
+                "ORDER BY created_at DESC LIMIT 8"
+            )
+            rows = cur.fetchall()
+    return jsonify({"images": [
+        {"url": r["image_url"], "prompt": r["prompt"], "style": r["style"]}
+        for r in rows
+    ]})
+
+
 @app.get("/api/stats")
 def stats():
     user = current_user()
