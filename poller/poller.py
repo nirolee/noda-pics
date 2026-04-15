@@ -18,19 +18,34 @@ except ImportError:
     print("请先安装 boto3: pip install boto3")
     sys.exit(1)
 
+try:
+    from dotenv import load_dotenv
+    from pathlib import Path
+    load_dotenv(Path(__file__).parent / ".env")
+except ImportError:
+    pass  # python-dotenv 未安装时直接读系统环境变量
+
+
+def _require(key: str) -> str:
+    val = os.environ.get(key, "")
+    if not val:
+        sys.exit(f"❌ 缺少环境变量：{key}，请在 poller/.env 中配置")
+    return val
+
+
 # ── 配置 ──────────────────────────────────────────────
-DB_HOST     = "YOUR_DB_HOST"
-DB_PORT     = 3306
-DB_USER     = "noda_pics"
-DB_PASS     = "REDACTED_DB_PASS"
+DB_HOST     = os.environ.get("DB_HOST", "127.0.0.1")
+DB_PORT     = int(os.environ.get("DB_PORT", "3306"))
+DB_USER     = os.environ.get("DB_USER", "noda_pics")
+DB_PASS     = _require("DB_PASS")
+DB_NAME     = os.environ.get("DB_NAME", "noda_pics")
 
 # Cloudflare R2
-R2_ENDPOINT    = "https://543abdc2576d9ccf0b4a5e9f41ed501f.r2.cloudflarestorage.com"
-R2_ACCESS_KEY  = "REDACTED_R2_ACCESS_KEY"
-R2_SECRET_KEY  = "REDACTED_R2_SECRET_KEY"
-R2_BUCKET      = "noda-pics"
-IMG_BASE       = "https://img.noda.pics"
-DB_NAME     = "noda_pics"
+R2_ENDPOINT    = _require("R2_ENDPOINT")
+R2_ACCESS_KEY  = _require("R2_ACCESS_KEY")
+R2_SECRET_KEY  = _require("R2_SECRET_KEY")
+R2_BUCKET      = os.environ.get("R2_BUCKET", "noda-pics")
+IMG_BASE       = os.environ.get("IMG_BASE", "https://img.noda.pics")
 
 COMFY_URL      = "http://127.0.0.1:8188"
 POLL_EVERY     = 5      # 没任务时等待秒数

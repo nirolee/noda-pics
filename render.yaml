@@ -9,13 +9,13 @@ services:
     healthCheckPath: /health
     envVars:
       - key: DB_HOST
-        value: YOUR_DB_HOST
+        sync: false
       - key: DB_PORT
         value: 3306
       - key: DB_USER
         value: noda_pics
       - key: DB_PASS
-        value: "REDACTED_DB_PASS"
+        sync: false
       - key: DB_NAME
         value: noda_pics
       - key: RATE_LIMIT

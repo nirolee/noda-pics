@@ -1,5 +1,7 @@
 *.pyc
 __pycache__/
 .env
+poller/.env
 *.log
 .DS_Store
+.idea/
