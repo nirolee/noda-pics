@@ -57,12 +57,15 @@ CREEM_BASE        = "https://test-api.creem.io" if CREEM_TEST_MODE else "https:/
 # 每个 pack 由 product_id + 赠送 credit 数量组成
 CREDIT_PACKS = {
     "small":  {"product_id": os.getenv("CREEM_PRODUCT_CREDITS_SMALL",  ""),
-               "credits": int(os.getenv("CREDITS_SMALL_AMOUNT",  "50"))},
+               "credits": int(os.getenv("CREDITS_SMALL_AMOUNT",  "60"))},
     "medium": {"product_id": os.getenv("CREEM_PRODUCT_CREDITS_MEDIUM", ""),
-               "credits": int(os.getenv("CREDITS_MEDIUM_AMOUNT", "200"))},
+               "credits": int(os.getenv("CREDITS_MEDIUM_AMOUNT", "250"))},
     "large":  {"product_id": os.getenv("CREEM_PRODUCT_CREDITS_LARGE",  ""),
                "credits": int(os.getenv("CREDITS_LARGE_AMOUNT",  "500"))},
 }
+
+# Pro 订阅附送 credits：$4.99/月 → 200 credits，累积不清零
+PRO_MONTHLY_CREDITS = int(os.getenv("PRO_MONTHLY_CREDITS", "200"))
 
 
 def get_db():
@@ -798,6 +801,25 @@ def payment_webhook():
                     "creem_subscription_id=%s, creem_customer_id=%s WHERE id=%s",
                     (expires_at, sub_id or "", cust_id or "", user_id)
                 )
+        _grant_pro_monthly_credits(int(user_id), sub_id or "")
+
+    def _grant_pro_monthly_credits(user_id: int, sub_id: str):
+        """Pro 订阅每月发 PRO_MONTHLY_CREDITS，按 YYYYMM 幂等（同月不重复）"""
+        if PRO_MONTHLY_CREDITS <= 0:
+            return
+        ym = datetime.now().strftime("%Y%m")
+        ref = f"pro_monthly_{sub_id or user_id}_{ym}"
+        with get_db() as db:
+            with db.cursor() as cur:
+                cur.execute(
+                    "SELECT id FROM credit_ledger WHERE ref_id = %s AND reason = 'pro_monthly' LIMIT 1",
+                    (ref,)
+                )
+                if cur.fetchone():
+                    app.logger.info(f"[webhook] pro_monthly dup skip ref={ref}")
+                    return
+        add_credits(user_id, PRO_MONTHLY_CREDITS, "pro_monthly", ref)
+        app.logger.info(f"[webhook] +{PRO_MONTHLY_CREDITS} pro_monthly user={user_id} ref={ref}")
 
     if event_type in ("checkout.completed", "subscription.active"):
         meta    = data.get("metadata") or {}
@@ -856,6 +878,13 @@ def payment_webhook():
                         "UPDATE users SET plan_expires_at=%s WHERE creem_subscription_id=%s",
                         (expires_at, sub_id)
                     )
+                    cur.execute(
+                        "SELECT id FROM users WHERE creem_subscription_id=%s",
+                        (sub_id,)
+                    )
+                    row = cur.fetchone()
+            if row:
+                _grant_pro_monthly_credits(row["id"], sub_id)
 
     elif event_type == "subscription.cancelled":
         pass  # 不立即降级，等 plan_expires_at 自然到期
