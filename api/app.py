@@ -36,6 +36,11 @@ RATE_USER   = int(os.getenv("RATE_USER",   "10"))   # 免费用户每天限额
 RATE_PRO    = int(os.getenv("RATE_PRO",    "100"))  # Pro 用户每天限额
 QUEUE_MAX   = int(os.getenv("QUEUE_MAX",   "20"))
 
+# 合法的生成模式
+VALID_MODES = {"txt2img", "pulid", "ccdb"}
+# character_pack 一次最多多少张（防滥用）
+BATCH_MAX_PROMPTS = int(os.getenv("BATCH_MAX_PROMPTS", "20"))
+
 GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID",     "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 GITHUB_CLIENT_ID     = os.getenv("GITHUB_CLIENT_ID",     "")
@@ -47,6 +52,17 @@ CREEM_WEBHOOK_SEC = os.getenv("CREEM_WEBHOOK_SECRET","")
 CREEM_PRODUCT_PRO = os.getenv("CREEM_PRODUCT_PRO",  "")
 CREEM_TEST_MODE   = os.getenv("CREEM_TEST_MODE",     "true").lower() == "true"
 CREEM_BASE        = "https://test-api.creem.io" if CREEM_TEST_MODE else "https://api.creem.io"
+
+# Credit packs（由用户在 Creem dashboard 创建 one-time 产品后，把 product_id 填到 env）
+# 每个 pack 由 product_id + 赠送 credit 数量组成
+CREDIT_PACKS = {
+    "small":  {"product_id": os.getenv("CREEM_PRODUCT_CREDITS_SMALL",  ""),
+               "credits": int(os.getenv("CREDITS_SMALL_AMOUNT",  "50"))},
+    "medium": {"product_id": os.getenv("CREEM_PRODUCT_CREDITS_MEDIUM", ""),
+               "credits": int(os.getenv("CREDITS_MEDIUM_AMOUNT", "200"))},
+    "large":  {"product_id": os.getenv("CREEM_PRODUCT_CREDITS_LARGE",  ""),
+               "credits": int(os.getenv("CREDITS_LARGE_AMOUNT",  "500"))},
+}
 
 
 def get_db():
@@ -117,6 +133,46 @@ def is_pro_active(user: dict) -> bool:
     if isinstance(exp, str):
         exp = datetime.fromisoformat(exp)
     return exp > datetime.now()
+
+
+def _ledger_insert(cur, user_id: int, delta: int, balance_after: int,
+                   reason: str, ref_id: str | None):
+    cur.execute(
+        "INSERT INTO credit_ledger (user_id, delta, balance_after, reason, ref_id) "
+        "VALUES (%s, %s, %s, %s, %s)",
+        (user_id, delta, balance_after, reason, ref_id)
+    )
+
+
+def add_credits(user_id: int, amount: int, reason: str, ref_id: str | None = None) -> int:
+    """给用户加 credits，返回新余额。amount 可正可负。"""
+    with get_db() as db:
+        with db.cursor() as cur:
+            cur.execute(
+                "UPDATE users SET credits_balance = credits_balance + %s WHERE id = %s",
+                (amount, user_id)
+            )
+            cur.execute("SELECT credits_balance FROM users WHERE id = %s", (user_id,))
+            new_balance = cur.fetchone()["credits_balance"]
+            _ledger_insert(cur, user_id, amount, new_balance, reason, ref_id)
+            return new_balance
+
+
+def spend_credits_atomic(user_id: int, amount: int, reason: str, ref_id: str | None) -> int | None:
+    """原子扣 amount credits，余额不足返回 None，成功返回新余额。"""
+    with get_db() as db:
+        with db.cursor() as cur:
+            cur.execute(
+                "UPDATE users SET credits_balance = credits_balance - %s "
+                "WHERE id = %s AND credits_balance >= %s",
+                (amount, user_id, amount)
+            )
+            if cur.rowcount == 0:
+                return None
+            cur.execute("SELECT credits_balance FROM users WHERE id = %s", (user_id,))
+            new_balance = cur.fetchone()["credits_balance"]
+            _ledger_insert(cur, user_id, -amount, new_balance, reason, ref_id)
+            return new_balance
 
 
 def check_quota(ip: str, user: dict | None) -> tuple[bool, int, int]:
@@ -217,6 +273,7 @@ def me():
         "plan":           user["plan"],
         "plan_active":    is_pro_active(user) if user["plan"] == "pro" else False,
         "plan_expires_at": str(user["plan_expires_at"]) if user.get("plan_expires_at") else None,
+        "credits_balance": int(user.get("credits_balance") or 0),
     }})
 
 
@@ -350,10 +407,23 @@ def submit_job():
     ip   = request.headers.get("X-Forwarded-For", request.remote_addr).split(",")[0].strip()
     user = current_user()
 
-    allowed, used, limit = check_quota(ip, user)
-    if not allowed:
-        msg = f"今日已用 {used}/{limit} 次" if user else f"游客每天限 {RATE_GUEST} 次，注册后可获得 {RATE_USER} 次"
-        return jsonify({"error": "quota_exceeded", "message": msg, "used": used, "limit": limit}), 429
+    # 游客仍走 IP 每日配额；已登录用户走 credits 系统（下面扣费）
+    if not user:
+        allowed, used, limit = check_quota(ip, None)
+        if not allowed:
+            return jsonify({
+                "error": "quota_exceeded",
+                "message": f"游客每天限 {RATE_GUEST} 次，注册后可获得 {RATE_USER} 免费 credits",
+                "used": used, "limit": limit,
+            }), 429
+    else:
+        # 已登录：credits 必须 ≥ 1
+        if int(user.get("credits_balance") or 0) < 1:
+            return jsonify({
+                "error": "insufficient_credits",
+                "message": "Credits 不足，请购买",
+                "balance": int(user.get("credits_balance") or 0),
+            }), 402
 
     with get_db() as db:
         with db.cursor() as cur:
@@ -361,32 +431,175 @@ def submit_job():
             if cur.fetchone()["cnt"] >= QUEUE_MAX:
                 return jsonify({"error": "queue_full", "message": "队列已满，请稍后再试"}), 503
 
-    body   = request.get_json(silent=True) or {}
-    prompt = (body.get("prompt") or "").strip()
-    style  = (body.get("style")  or "default").strip()
+    body    = request.get_json(silent=True) or {}
+    prompt  = (body.get("prompt") or "").strip()
+    style   = (body.get("style")  or "default").strip()
+    ref_url = (body.get("reference_image_url") or "").strip() or None
+    mode    = (body.get("mode") or "").strip().lower() or None
 
     if not prompt:
         return jsonify({"error": "missing_prompt"}), 400
     if len(prompt) > 500:
         return jsonify({"error": "prompt_too_long"}), 400
+    if ref_url and not (ref_url.startswith("http://") or ref_url.startswith("https://")):
+        return jsonify({"error": "invalid_reference_url"}), 400
+    if ref_url and len(ref_url) > 500:
+        return jsonify({"error": "reference_url_too_long"}), 400
+    if mode and mode not in VALID_MODES:
+        return jsonify({"error": "invalid_mode", "valid": list(VALID_MODES)}), 400
+
+    # 默认 mode：有 ref → pulid；无 ref → txt2img（保持旧行为兼容）
+    if mode is None:
+        mode = "pulid" if ref_url else "txt2img"
+    if mode in ("pulid", "ccdb") and not ref_url:
+        return jsonify({"error": "mode_requires_reference_image"}), 400
 
     job_id  = str(uuid.uuid4())
     user_id = user["id"] if user else None
 
+    # 已登录用户先原子扣 1 credit，再入队（任一失败不计费）
+    new_balance = None
+    if user:
+        new_balance = spend_credits_atomic(user_id, 1, "job_spend", job_id)
+        if new_balance is None:
+            return jsonify({"error": "insufficient_credits"}), 402
+
+    try:
+        with get_db() as db:
+            with db.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO jobs (id, prompt, style, reference_image_url, mode, status, ip, user_id) "
+                    "VALUES (%s, %s, %s, %s, %s, 'pending', %s, %s)",
+                    (job_id, prompt, style, ref_url, mode, ip, user_id)
+                )
+                cur.execute("SELECT COUNT(*) AS cnt FROM jobs WHERE status='pending'")
+                queue_len = cur.fetchone()["cnt"]
+    except Exception:
+        # 入队失败就退还 credit
+        if user:
+            add_credits(user_id, 1, "refund", job_id)
+        raise
+
+    resp = {"job_id": job_id, "status": "pending", "queue_pos": queue_len, "mode": mode}
+    if user:
+        resp["credits_balance"] = new_balance
+    else:
+        resp["quota"] = {"used": used + 1, "limit": limit}
+    return jsonify(resp), 201
+
+
+@app.post("/api/jobs/batch")
+@require_auth
+def submit_batch_job():
+    """Character Pack：1 张参考图 + N 条 prompt → 生成 N 张一致性图片
+
+    Body: {
+      "reference_image_url": "https://...",
+      "mode": "ccdb",  // 可选，默认 ccdb
+      "prompts": ["prompt1", "prompt2", ...]  // 每条一张图
+    }
+    返回 batch_id + job_ids[]，前端轮询 GET /api/batches/<id>
+    """
+    ip   = request.headers.get("X-Forwarded-For", request.remote_addr).split(",")[0].strip()
+    user = request.user
+
+    body    = request.get_json(silent=True) or {}
+    ref_url = (body.get("reference_image_url") or "").strip()
+    mode    = (body.get("mode") or "ccdb").strip().lower()
+    prompts = body.get("prompts") or []
+
+    if not ref_url:
+        return jsonify({"error": "missing_reference_image_url"}), 400
+    if not (ref_url.startswith("http://") or ref_url.startswith("https://")):
+        return jsonify({"error": "invalid_reference_url"}), 400
+    if len(ref_url) > 500:
+        return jsonify({"error": "reference_url_too_long"}), 400
+    if mode not in VALID_MODES:
+        return jsonify({"error": "invalid_mode", "valid": list(VALID_MODES)}), 400
+    if mode == "txt2img":
+        return jsonify({"error": "batch_requires_reference_mode"}), 400
+    if not isinstance(prompts, list) or not prompts:
+        return jsonify({"error": "missing_prompts"}), 400
+    if len(prompts) > BATCH_MAX_PROMPTS:
+        return jsonify({"error": "too_many_prompts", "max": BATCH_MAX_PROMPTS}), 400
+
+    prompts = [str(p).strip() for p in prompts]
+    if any(not p for p in prompts):
+        return jsonify({"error": "empty_prompt_in_batch"}), 400
+    if any(len(p) > 500 for p in prompts):
+        return jsonify({"error": "prompt_too_long"}), 400
+
+    # Credits 预检（批量要求 N 个）
+    balance = int(user.get("credits_balance") or 0)
+    if balance < len(prompts):
+        return jsonify({
+            "error": "insufficient_credits",
+            "message": f"本批需 {len(prompts)} credits，当前余额 {balance}",
+            "required": len(prompts), "balance": balance,
+        }), 402
+
+    with get_db() as db:
+        with db.cursor() as cur:
+            cur.execute("SELECT COUNT(*) AS cnt FROM jobs WHERE status='pending'")
+            if cur.fetchone()["cnt"] + len(prompts) > QUEUE_MAX:
+                return jsonify({"error": "queue_full"}), 503
+
+    batch_id = str(uuid.uuid4())
+
+    # 原子扣 N credits
+    new_balance = spend_credits_atomic(user["id"], len(prompts), "batch_spend", batch_id)
+    if new_balance is None:
+        return jsonify({"error": "insufficient_credits"}), 402
+
+    job_ids = []
+    try:
+        with get_db() as db:
+            with db.cursor() as cur:
+                for p in prompts:
+                    jid = str(uuid.uuid4())
+                    cur.execute(
+                        "INSERT INTO jobs (id, batch_id, prompt, style, reference_image_url, mode, "
+                        "status, ip, user_id) VALUES (%s, %s, %s, 'default', %s, %s, 'pending', %s, %s)",
+                        (jid, batch_id, p, ref_url, mode, ip, user["id"])
+                    )
+                    job_ids.append(jid)
+    except Exception:
+        add_credits(user["id"], len(prompts), "refund", batch_id)
+        raise
+
+    return jsonify({
+        "batch_id": batch_id,
+        "job_ids": job_ids,
+        "count": len(job_ids),
+        "mode": mode,
+        "credits_balance": new_balance,
+    }), 201
+
+
+@app.get("/api/batches/<batch_id>")
+def get_batch_status(batch_id: str):
     with get_db() as db:
         with db.cursor() as cur:
             cur.execute(
-                "INSERT INTO jobs (id, prompt, style, status, ip, user_id) "
-                "VALUES (%s, %s, %s, 'pending', %s, %s)",
-                (job_id, prompt, style, ip, user_id)
+                "SELECT id, prompt, status, image_url, error FROM jobs "
+                "WHERE batch_id = %s ORDER BY created_at",
+                (batch_id,)
             )
-            cur.execute("SELECT COUNT(*) AS cnt FROM jobs WHERE status='pending'")
-            queue_len = cur.fetchone()["cnt"]
-
+            jobs = cur.fetchall()
+    if not jobs:
+        return jsonify({"error": "not_found"}), 404
+    counts = {"pending": 0, "processing": 0, "done": 0, "failed": 0}
+    for j in jobs:
+        counts[j["status"]] = counts.get(j["status"], 0) + 1
     return jsonify({
-        "job_id": job_id, "status": "pending", "queue_pos": queue_len,
-        "quota": {"used": used + 1, "limit": limit},
-    }), 201
+        "batch_id": batch_id,
+        "total": len(jobs),
+        "counts": counts,
+        "all_done": counts["pending"] == 0 and counts["processing"] == 0,
+        "jobs": [{"id": j["id"], "status": j["status"],
+                  "image_url": j["image_url"], "prompt": j["prompt"],
+                  "error": j["error"]} for j in jobs],
+    })
 
 
 @app.get("/api/jobs/<job_id>")
@@ -462,6 +675,76 @@ def health():
 # 支付接口（Creem）
 # ═══════════════════════════════════════════
 
+@app.get("/api/credits/packs")
+def list_credit_packs():
+    """前端拉 pack 列表用"""
+    return jsonify({"packs": [
+        {"id": k, "credits": v["credits"], "available": bool(v["product_id"])}
+        for k, v in CREDIT_PACKS.items()
+    ]})
+
+
+@app.post("/api/credits/checkout")
+@require_auth
+def credits_checkout():
+    """买 credit 包：{pack: "small"|"medium"|"large"} → 返回 Creem checkout_url"""
+    if not CREEM_API_KEY:
+        return jsonify({"error": "payment_not_configured"}), 503
+
+    body = request.get_json(silent=True) or {}
+    pack_id = (body.get("pack") or "").strip().lower()
+    pack = CREDIT_PACKS.get(pack_id)
+    if not pack:
+        return jsonify({"error": "invalid_pack", "valid": list(CREDIT_PACKS)}), 400
+    if not pack["product_id"]:
+        return jsonify({"error": "pack_not_configured"}), 503
+
+    user = request.user
+    r = requests.post(
+        f"{CREEM_BASE}/v1/checkouts",
+        headers={"x-api-key": CREEM_API_KEY, "Content-Type": "application/json"},
+        json={
+            "product_id":  pack["product_id"],
+            "success_url": f"{OAUTH_REDIRECT_BASE}/api/payment/success",
+            "customer":    {"email": user["email"]},
+            "metadata": {
+                "user_id": user["id"],
+                "type": "credits",
+                "pack": pack_id,
+                "credits": pack["credits"],
+            },
+        },
+        timeout=15,
+    )
+    if not r.ok:
+        return jsonify({"error": "checkout_failed", "detail": r.text}), 500
+    return jsonify({
+        "checkout_url": r.json().get("checkout_url"),
+        "pack": pack_id,
+        "credits": pack["credits"],
+    })
+
+
+@app.get("/api/credits/history")
+@require_auth
+def credits_history():
+    """最近 50 条流水"""
+    with get_db() as db:
+        with db.cursor() as cur:
+            cur.execute(
+                "SELECT delta, balance_after, reason, ref_id, created_at FROM credit_ledger "
+                "WHERE user_id = %s ORDER BY id DESC LIMIT 50",
+                (request.user["id"],)
+            )
+            rows = cur.fetchall()
+    return jsonify({"history": [
+        {"delta": r["delta"], "balance_after": r["balance_after"],
+         "reason": r["reason"], "ref_id": r["ref_id"],
+         "created_at": str(r["created_at"])}
+        for r in rows
+    ]})
+
+
 @app.post("/api/payment/checkout")
 @require_auth
 def create_checkout():
@@ -521,6 +804,27 @@ def payment_webhook():
         user_id = meta.get("user_id")
         sub_id  = data.get("subscription_id") or data.get("id", "")
         cust_id = (data.get("customer") or {}).get("id") or data.get("customer_id", "")
+        checkout_id = data.get("id", "")
+
+        # 一次性 credit 包：type=credits，直接加 credits 不激活 Pro
+        if meta.get("type") == "credits" and user_id:
+            credits = int(meta.get("credits") or 0)
+            if credits > 0:
+                # 幂等：同一 checkout_id 不重复加
+                with get_db() as db:
+                    with db.cursor() as cur:
+                        cur.execute(
+                            "SELECT id FROM credit_ledger WHERE ref_id = %s AND reason = 'purchase' LIMIT 1",
+                            (checkout_id,)
+                        )
+                        if not cur.fetchone():
+                            add_credits(int(user_id), credits, "purchase", checkout_id)
+                            app.logger.info(f"[webhook] +{credits} credits user={user_id} ref={checkout_id}")
+                        else:
+                            app.logger.info(f"[webhook] dup ignored ref={checkout_id}")
+            return jsonify({"status": "ok"})
+
+        # Pro 订阅激活
         if user_id:
             _activate_pro(user_id, sub_id, cust_id)
 

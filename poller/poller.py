@@ -95,7 +95,7 @@ def fetch_next_job() -> dict | None:
         with db.cursor() as cur:
             # 用 UPDATE + SELECT 避免并发重复消费（本地单进程问题不大，但好习惯）
             cur.execute(
-                "SELECT id, prompt, style FROM jobs "
+                "SELECT id, prompt, style, reference_image_url, mode FROM jobs "
                 "WHERE status = 'pending' ORDER BY created_at LIMIT 1"
             )
             job = cur.fetchone()
@@ -186,6 +186,7 @@ def cleanup_expired_images():
 # ── ComfyUI ───────────────────────────────────────────
 
 def build_workflow(prompt_text: str) -> dict:
+    """Text-to-image workflow (原始流程)"""
     seed = int(time.time() * 1000) % (2 ** 31)
     return {
         "1": {"class_type": "UnetLoaderGGUF",
@@ -215,20 +216,214 @@ def build_workflow(prompt_text: str) -> dict:
     }
 
 
-def comfy_generate(prompt_text: str) -> bytes:
-    """提交任务到 ComfyUI，等待完成，返回图片字节"""
+def build_pulid_workflow(prompt_text: str, ref_filename: str, pulid_strength: float = 1.0) -> dict:
+    """PuLID-Flux2 workflow（角色面部硬锁 · 纯 text-to-image + 模型端注入身份）
+
+    流程：参考图 → InsightFace 提取人脸 → EVA-CLIP 嵌入 → PuLID 把身份注入到 UNet
+    → 纯 text-to-image 生成全新场景（构图不受参考图约束）
+
+    strength 控制身份强度：
+      - 0.8-1.0：标准（推荐 1.0）
+      - 1.2-1.5：强（脸更像，但场景自由度略降）
+      - 0.5-0.8：弱（脸只是"暗示"）
+    """
+    seed = int(time.time() * 1000) % (2 ** 31)
+    return {
+        # 基础 Flux 模型
+        "1": {"class_type": "UnetLoaderGGUF",
+              "inputs": {"unet_name": "flux-2-klein-4b-Q5_K_M.gguf"}},
+        "2": {"class_type": "CLIPLoader",
+              "inputs": {"clip_name": "qwen_3_4b.safetensors", "type": "flux2"}},
+        "3": {"class_type": "VAELoader",
+              "inputs": {"vae_name": "flux2-vae.safetensors"}},
+        # PuLID 组件
+        "20": {"class_type": "PuLIDInsightFaceLoader",
+               "inputs": {"provider": "CPU"}},  # CPU 够用,避开 onnxruntime-gpu + Python 3.13 兼容坑
+        "21": {"class_type": "PuLIDEVACLIPLoader",
+               "inputs": {}},
+        "22": {"class_type": "PuLIDModelLoader",
+               "inputs": {"pulid_file": "pulid_flux2_klein_v2.safetensors"}},
+        "23": {"class_type": "LoadImage",
+               "inputs": {"image": ref_filename}},
+        # 把 PuLID 身份注入到基础模型
+        "24": {"class_type": "ApplyPuLIDFlux2",
+               "inputs": {
+                   "model": ["1", 0],
+                   "pulid_model": ["22", 0],
+                   "strength": pulid_strength,
+                   "eva_clip": ["21", 0],
+                   "face_analysis": ["20", 0],
+                   "image": ["23", 0],
+               }},
+        # 文本编码
+        "4": {"class_type": "CLIPTextEncode",
+              "inputs": {"text": prompt_text, "clip": ["2", 0]}},
+        "5": {"class_type": "CLIPTextEncode",
+              "inputs": {"text": "", "clip": ["2", 0]}},
+        # 空 latent（纯 text-to-image，不用参考图 VAE encode）
+        "6": {"class_type": "EmptyLatentImage",
+              "inputs": {"width": IMG_W, "height": IMG_H, "batch_size": 1}},
+        # Sampler 用 PuLID-modified 模型
+        "7": {"class_type": "KSampler",
+              "inputs": {
+                  "model": ["24", 0],  # ← 关键：用 ApplyPuLIDFlux2 输出的模型
+                  "positive": ["4", 0], "negative": ["5", 0],
+                  "latent_image": ["6", 0],
+                  "seed": seed, "control_after_generate": "fixed",
+                  "steps": 4, "cfg": 1.0,
+                  "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0,
+              }},
+        "8": {"class_type": "VAEDecode",
+              "inputs": {"samples": ["7", 0], "vae": ["3", 0]}},
+        "9": {"class_type": "SaveImage",
+              "inputs": {"images": ["8", 0], "filename_prefix": "noda_pulid"}},
+    }
+
+
+def build_ccdb_workflow(prompt_text: str, ref_filename: str,
+                        width: int = 1216, height: int = 832) -> dict:
+    """CCDB workflow（角色风格化一致性 · ReferenceLatent 路径）
+
+    流程：参考图 → VAE 编码成 latent → 作为 ReferenceLatent 注入条件 →
+    sampler 生成时保持角色整体外观（脸+发型+服装+画风）
+
+    vs PuLID：PuLID 只锁人脸 ID，对二次元/插画风失败。CCDB 锁整张图的
+    "latent 特征"，对 Ghibli / cel-shaded / anime 这类风格化人物效果好。
+    """
+    seed = int(time.time() * 1000) % (2 ** 63)
+    return {
+        # 模型加载
+        "123": {"class_type": "VAELoader",
+                "inputs": {"vae_name": "flux2-vae.safetensors"}},
+        "246": {"class_type": "UnetLoaderGGUF",
+                "inputs": {"unet_name": "flux-2-klein-4b-Q5_K_M.gguf"}},
+        "255": {"class_type": "CLIPLoader",
+                "inputs": {"clip_name": "qwen_3_4b.safetensors",
+                           "type": "flux2", "device": "default"}},
+        "81":  {"class_type": "ModelPassThrough",
+                "inputs": {"model": ["246", 0]}},
+        # 参考图 → VAE 编码
+        "166": {"class_type": "LoadImage", "inputs": {"image": ref_filename}},
+        "263": {"class_type": "ImageScaleToTotalPixels",
+                "inputs": {"upscale_method": "nearest-exact",
+                           "megapixels": 1, "resolution_steps": 1,
+                           "image": ["166", 0]}},
+        "266:204": {"class_type": "VAEEncode",
+                    "inputs": {"pixels": ["263", 0], "vae": ["123", 0]}},
+        # 文本条件
+        "252": {"class_type": "CLIPTextEncode",
+                "inputs": {"text": prompt_text, "clip": ["255", 0]}},
+        "251": {"class_type": "ConditioningZeroOut",
+                "inputs": {"conditioning": ["252", 0]}},
+        # ReferenceLatent：把参考图 latent 作为条件
+        "266:264": {"class_type": "ReferenceLatent",
+                    "inputs": {"conditioning": ["252", 0],
+                               "latent": ["266:204", 0]}},
+        "266:265": {"class_type": "ReferenceLatent",
+                    "inputs": {"conditioning": ["251", 0],
+                               "latent": ["266:204", 0]}},
+        # 空 latent（实际生成用）
+        "262": {"class_type": "SetImageSize",
+                "inputs": {"width": width, "height": height}},
+        "256": {"class_type": "EmptyFlux2LatentImage",
+                "inputs": {"width": ["262", 0], "height": ["262", 1], "batch_size": 1}},
+        # 采样器
+        "257": {"class_type": "RandomNoise", "inputs": {"noise_seed": seed}},
+        "258": {"class_type": "CFGGuider",
+                "inputs": {"cfg": 1, "model": ["81", 0],
+                           "positive": ["266:264", 0], "negative": ["266:265", 0]}},
+        "259": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "euler"}},
+        "260": {"class_type": "Flux2Scheduler",
+                "inputs": {"steps": 4, "width": ["262", 0], "height": ["262", 1]}},
+        "261": {"class_type": "SamplerCustomAdvanced",
+                "inputs": {"noise": ["257", 0], "guider": ["258", 0],
+                           "sampler": ["259", 0], "sigmas": ["260", 0],
+                           "latent_image": ["256", 0]}},
+        "145": {"class_type": "VAEDecode",
+                "inputs": {"samples": ["261", 0], "vae": ["123", 0]}},
+        # 保存（用原版 SaveImage 而非 Image Saver Simple，避免子目录问题）
+        "9":   {"class_type": "SaveImage",
+                "inputs": {"images": ["145", 0], "filename_prefix": "noda_ccdb"}},
+    }
+
+
+def upload_ref_to_comfy(image_url: str, filename: str) -> str:
+    """下载远程参考图 → 上传到 ComfyUI 的 input 目录 → 返回内部文件名"""
+    log.info(f"  ↓ 下载 reference: {image_url}")
+    # Cloudflare / R2 会屏蔽默认 User-Agent,要伪装成浏览器
+    ref_req = urllib.request.Request(
+        image_url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        }
+    )
+    img_bytes = urllib.request.urlopen(ref_req, timeout=30).read()
+    log.info(f"    {len(img_bytes)//1024} KB")
+
+    # 用 multipart/form-data 上传
+    boundary = f"----noda{uuid.uuid4().hex[:16]}"
+    body = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="image"; filename="{filename}"\r\n'
+        f"Content-Type: image/png\r\n\r\n"
+    ).encode() + img_bytes + f"\r\n--{boundary}\r\n".encode() + (
+        f'Content-Disposition: form-data; name="overwrite"\r\n\r\ntrue\r\n'
+        f"--{boundary}--\r\n"
+    ).encode()
+
+    req = urllib.request.Request(
+        f"{COMFY_URL}/upload/image", data=body,
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"}
+    )
+    resp = urllib.request.urlopen(req, timeout=30)
+    result = json.loads(resp.read())
+    log.info(f"  ↑ uploaded to ComfyUI: {result.get('name', filename)}")
+    return result.get("name", filename)
+
+
+def comfy_generate(prompt_text: str, reference_image_url: str | None = None,
+                   mode: str = "txt2img") -> bytes:
+    """提交任务到 ComfyUI，等待完成，返回图片字节
+
+    mode:
+      - txt2img: 纯文生图（无参考图）
+      - pulid:   PuLID-Flux2，锁人脸 ID，适合真实人像照片
+      - ccdb:    CCDB ReferenceLatent，锁整体风格+身份，适合二次元/插画风
+
+    若 reference_image_url 非空而 mode 未指定，默认走 pulid（兼容旧行为）。
+    """
     client_id = str(uuid.uuid4())
-    payload   = json.dumps({"prompt": build_workflow(prompt_text), "client_id": client_id}).encode()
+
+    if reference_image_url:
+        ref_filename = f"noda_ref_{uuid.uuid4().hex[:8]}.png"
+        comfy_filename = upload_ref_to_comfy(reference_image_url, ref_filename)
+        if mode == "ccdb":
+            workflow = build_ccdb_workflow(prompt_text, comfy_filename)
+            log.info(f"  🎨 CCDB ReferenceLatent workflow")
+        else:
+            workflow = build_pulid_workflow(prompt_text, comfy_filename, pulid_strength=1.0)
+            log.info(f"  🔒 PuLID-Flux2 workflow (strength=1.0)")
+    else:
+        workflow = build_workflow(prompt_text)
+
+    payload = json.dumps({"prompt": workflow, "client_id": client_id}).encode()
 
     req = urllib.request.Request(
         f"{COMFY_URL}/prompt", data=payload,
         headers={"Content-Type": "application/json"}
     )
-    resp      = urllib.request.urlopen(req, timeout=15)
+    try:
+        resp = urllib.request.urlopen(req, timeout=15)
+    except urllib.error.HTTPError as e:
+        # 把 ComfyUI 返回的 error body 打出来，不然 400 是个黑盒
+        body = e.read().decode("utf-8", errors="replace")
+        log.error(f"  ComfyUI {e.code} response body: {body[:800]}")
+        raise
     prompt_id = json.loads(resp.read())["prompt_id"]
     log.info(f"  → ComfyUI prompt_id: {prompt_id[:8]}...")
 
-    for i in range(150):  # 最多等 5 分钟
+    for i in range(300):  # 最多等 10 分钟（PuLID 首次加载要下 InsightFace+EVA-CLIP 模型）
         time.sleep(2)
         hist = json.loads(
             urllib.request.urlopen(f"{COMFY_URL}/history/{prompt_id}", timeout=10).read()
@@ -265,11 +460,15 @@ def upload_to_r2(local_path: str, filename: str) -> str:
 def process_job(job: dict):
     job_id = job["id"]
     prompt = job["prompt"]
-    log.info(f"▶ job {job_id[:8]}  prompt: {prompt[:80]}")
+    ref_url = job.get("reference_image_url")
+    mode = (job.get("mode") or "txt2img").strip() or "txt2img"
+    log.info(f"▶ job {job_id[:8]}  mode={mode}  prompt: {prompt[:80]}")
+    if ref_url:
+        log.info(f"  🔒 reference: {ref_url}")
 
     tmp_file = None
     try:
-        img_bytes = comfy_generate(prompt)
+        img_bytes = comfy_generate(prompt, reference_image_url=ref_url, mode=mode)
 
         filename = f"{job_id}.png"
         tmp_file = os.path.join(tempfile.gettempdir(), filename)
