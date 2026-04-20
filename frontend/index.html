@@ -239,6 +239,99 @@ body::before {
 }
 .upgrade-login-hint a { color: var(--accent); cursor: pointer; }
 
+/* ── Credits packs (inside credits modal) ── */
+.credits-modal {
+  background: #13151f;
+  border: 1px solid var(--border-h);
+  border-radius: 20px;
+  padding: 36px 32px;
+  width: 100%;
+  max-width: 520px;
+  position: relative;
+  transform: translateY(16px);
+  transition: transform 0.25s;
+  text-align: center;
+}
+.modal-backdrop.open .credits-modal { transform: none; }
+.credits-balance-hint {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 20px;
+}
+.credits-balance-hint b { color: var(--accent); font-weight: 700; }
+.credits-packs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin: 12px 0 20px;
+}
+@media (max-width: 540px) {
+  .credits-packs { grid-template-columns: 1fr; }
+}
+.credits-pack {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: rgba(255,255,255,0.02);
+  position: relative;
+}
+.credits-pack:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  background: rgba(124,106,247,0.06);
+}
+.credits-pack.popular { border-color: var(--accent); }
+.credits-pack.popular::before {
+  content: attr(data-popular);
+  position: absolute;
+  top: -9px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+.credits-pack-credits {
+  font-family: var(--font-head);
+  font-size: 26px;
+  font-weight: 800;
+}
+.credits-pack-label {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.credits-pack-price {
+  font-family: var(--font-head);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.credits-pack-unit {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.credits-link-pro {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 8px;
+}
+.credits-link-pro a { color: var(--accent); cursor: pointer; }
+
+/* 登录用户的 credits 徽章样式（复用 quota-badge 的盒子，换内容即可）*/
+.quota-badge.credits { color: var(--accent); border-color: rgba(124,106,247,0.35); cursor: pointer; }
+.quota-badge.credits:hover { background: rgba(124,106,247,0.08); }
+.quota-badge.credits.low { color: var(--accent2); border-color: rgba(247,124,106,0.35); }
+
 /* ── Auth Modal ── */
 .modal-backdrop {
   position: fixed; inset: 0;
@@ -979,18 +1072,56 @@ textarea:focus {
   <div class="upgrade-modal">
     <button class="modal-close" onclick="closeUpgrade()">×</button>
     <div class="upgrade-icon">⚡</div>
-    <div class="upgrade-title">升级到 <span>Pro</span></div>
-    <div class="upgrade-sub" id="upgradeSubText">解锁更多生成次数，尽情创作</div>
-    <div class="upgrade-price">$3<span style="font-size:20px;color:var(--muted)">/月</span></div>
-    <div class="upgrade-price-sub">随时取消，无隐藏费用</div>
+    <div class="upgrade-title" data-i18n-html="proTitle">升级到 <span>Pro</span></div>
+    <div class="upgrade-sub" id="upgradeSubText" data-i18n="proSub">解锁更多生成次数，尽情创作</div>
+    <div class="upgrade-price">$4.99<span style="font-size:20px;color:var(--muted)" data-i18n="proPerMonth">/月</span></div>
+    <div class="upgrade-price-sub" data-i18n="proPriceSub">每月自动到账 200 credits，余额累积不清零</div>
     <ul class="upgrade-features">
-      <li>每天 100 张生成额度（免费版 10 张）</li>
-      <li>优先进入生成队列</li>
-      <li>支持所有风格</li>
+      <li data-i18n="proFeat1">每月 200 credits（$0.025/张，比 Midjourney 便宜一半）</li>
+      <li data-i18n="proFeat2">未用完 credits 自动累积到下月</li>
+      <li data-i18n="proFeat3">优先进入生成队列</li>
+      <li data-i18n="proFeat4">支持所有风格 + 角色一致性</li>
     </ul>
-    <button class="btn-upgrade" id="btnUpgrade" onclick="doCheckout()">立即升级 — $3/月</button>
+    <button class="btn-upgrade" id="btnUpgrade" onclick="doCheckout()" data-i18n="btnUpgradeNow">立即升级 — $4.99/月</button>
     <div class="upgrade-login-hint" id="upgradeLoginHint" style="display:none">
-      需要先 <a onclick="closeUpgrade();openModal('login')">登录</a> 才能升级
+      <span data-i18n="upgradeLoginHint">需要先</span>
+      <a onclick="closeUpgrade();openModal('login')" data-i18n="upgradeLoginLink">登录</a>
+      <span data-i18n="upgradeLoginHint2">才能升级</span>
+    </div>
+  </div>
+</div>
+
+<!-- Credits Modal -->
+<div class="modal-backdrop" id="creditsModal">
+  <div class="credits-modal">
+    <button class="modal-close" onclick="closeCredits()">×</button>
+    <div class="upgrade-icon">💎</div>
+    <div class="upgrade-title" data-i18n-html="creditsTitle">购买 <span>Credits</span></div>
+    <div class="upgrade-sub" data-i18n="creditsSub">按需付费，1 credit = 1 张图，永不过期</div>
+    <div class="credits-balance-hint" id="creditsBalanceHint"></div>
+    <div class="credits-packs">
+      <div class="credits-pack" onclick="doBuyCredits('small')">
+        <div class="credits-pack-credits">60</div>
+        <div class="credits-pack-label" data-i18n="creditsLabel">credits</div>
+        <div class="credits-pack-price">$3</div>
+        <div class="credits-pack-unit">$0.05/张</div>
+      </div>
+      <div class="credits-pack popular" data-popular="POPULAR" onclick="doBuyCredits('medium')">
+        <div class="credits-pack-credits">250</div>
+        <div class="credits-pack-label" data-i18n="creditsLabel">credits</div>
+        <div class="credits-pack-price">$8</div>
+        <div class="credits-pack-unit">$0.032/张</div>
+      </div>
+      <div class="credits-pack" onclick="doBuyCredits('large')">
+        <div class="credits-pack-credits">500</div>
+        <div class="credits-pack-label" data-i18n="creditsLabel">credits</div>
+        <div class="credits-pack-price">$15</div>
+        <div class="credits-pack-unit">$0.03/张</div>
+      </div>
+    </div>
+    <div class="credits-link-pro">
+      <span data-i18n="creditsOr">订阅更划算：</span>
+      <a onclick="closeCredits();openUpgrade()" data-i18n="creditsToPro">$4.99/月 拿 200 credits →</a>
     </div>
   </div>
 </div>
@@ -1122,9 +1253,33 @@ const I18N = {
     toLogin:      '去登录',
     menuLogout:   '退出登录',
     quotaFmt:     '今日 {used}/{limit}',
+    creditsFmt:   '{n} credits',
+    creditsLowHint:   'Credits 不足，点击购买',
     errLoginFail: '邮箱或密码错误',
     errRegFail:   '注册失败，请检查邮箱格式',
     errEmailTaken:'该邮箱已注册，请直接登录',
+    proTitle:     '升级到 <span>Pro</span>',
+    proSub:       '订阅后每月到账 200 credits，最便宜的玩法',
+    proSubOutOfCredits: 'Credits 用完了？升级 Pro 每月到账 200 credits',
+    proPerMonth:  '/月',
+    proPriceSub:  '每月自动到账 200 credits，余额累积不清零',
+    proFeat1:     '每月 200 credits（$0.025/张，比 Midjourney 便宜一半）',
+    proFeat2:     '未用完 credits 自动累积到下月',
+    proFeat3:     '优先进入生成队列',
+    proFeat4:     '支持所有风格 + 角色一致性',
+    btnUpgradeNow:'立即升级 — $4.99/月',
+    btnUpgradeRedirecting: '跳转中…',
+    upgradeLoginHint:  '需要先',
+    upgradeLoginLink:  '登录',
+    upgradeLoginHint2: '才能升级',
+    creditsTitle: '购买 <span>Credits</span>',
+    creditsSub:   '按需付费，1 credit = 1 张图，永不过期',
+    creditsLabel: 'credits',
+    creditsBalanceHint: '当前余额：<b>{n}</b> credits',
+    creditsOr:    '订阅更划算：',
+    creditsToPro: '$4.99/月 拿 200 credits →',
+    errOutOfCredits: 'Credits 不足，请购买',
+    paySuccess:   '🎉 支付成功！credits 已到账',
   },
   en: {
     heroTag:      'AI Image Synthesis Engine',
@@ -1177,9 +1332,33 @@ const I18N = {
     toLogin:      'Sign in',
     menuLogout:   'Sign out',
     quotaFmt:     '{used}/{limit} today',
+    creditsFmt:   '{n} credits',
+    creditsLowHint:   'Out of credits — tap to buy',
     errLoginFail: 'Invalid email or password',
     errRegFail:   'Registration failed, check your email',
     errEmailTaken:'Email already registered — sign in instead',
+    proTitle:     'Upgrade to <span>Pro</span>',
+    proSub:       '200 credits every month — the cheapest way to create',
+    proSubOutOfCredits: 'Out of credits? Pro gives you 200 credits/month',
+    proPerMonth:  '/mo',
+    proPriceSub:  '200 credits auto-refilled monthly, unused credits roll over',
+    proFeat1:     '200 credits/month ($0.025/image — half of Midjourney)',
+    proFeat2:     'Unused credits roll over to next month',
+    proFeat3:     'Priority in the generation queue',
+    proFeat4:     'All styles + character consistency',
+    btnUpgradeNow:'Upgrade now — $4.99/mo',
+    btnUpgradeRedirecting: 'Redirecting…',
+    upgradeLoginHint:  'Please',
+    upgradeLoginLink:  'sign in',
+    upgradeLoginHint2: 'to upgrade',
+    creditsTitle: 'Buy <span>Credits</span>',
+    creditsSub:   'Pay as you go. 1 credit = 1 image. Never expires.',
+    creditsLabel: 'credits',
+    creditsBalanceHint: 'Current balance: <b>{n}</b> credits',
+    creditsOr:    'Save with a subscription:',
+    creditsToPro: '$4.99/mo for 200 credits →',
+    errOutOfCredits: 'Out of credits. Please buy more.',
+    paySuccess:   '🎉 Payment complete! Credits added to your account',
   },
 };
 
@@ -1195,6 +1374,10 @@ function applyLang() {
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const k = el.dataset.i18n;
     el.textContent = t(k);
+  });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => {
+    // 允许 <span>/<b> 等内联标签，仅用于静态字典键，避免 XSS
+    el.innerHTML = t(el.dataset.i18nHtml);
   });
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
     el.placeholder = t(el.dataset.i18nPlaceholder);
@@ -1260,7 +1443,8 @@ async function loadStats() {
     const d = await fetch('/api/stats', { headers, credentials: 'include' }).then(r => r.json());
     document.getElementById('queueTxt').textContent =
       lang === 'zh' ? `队列 ${d.queue_len}/${d.queue_max}` : `Queue ${d.queue_len}/${d.queue_max}`;
-    if (d.quota) {
+    // 仅在未登录时用 /api/stats 的 quota 覆盖徽章；登录用户的 credits 由 refreshUser 管理
+    if (!currentUser && d.quota) {
       const badge = document.getElementById('quotaBadge');
       badge.textContent = t('quotaFmt', { used: d.quota.used, limit: d.quota.limit });
       badge.className   = 'quota-badge' + (d.quota.used >= d.quota.limit * 0.8 ? ' warn' : '');
@@ -1301,6 +1485,7 @@ async function generate() {
     });
 
     if (r.status === 429) { reset(); openUpgrade('quota'); return; }
+    if (r.status === 402) { reset(); openCredits('insufficient'); return; }
     if (r.status === 503) { reset(); showToast(t('errQueue')); return; }
     if (!r.ok) throw new Error(await r.text());
 
@@ -1399,10 +1584,12 @@ function openUpgrade(reason) {
   const btn  = document.getElementById('btnUpgrade');
   if (reason === 'quota') {
     sub.textContent = lang === 'zh'
-      ? '今日免费次数已用完，升级 Pro 获得 100 次/天'
-      : 'Daily free quota used up. Upgrade for 100/day.';
+      ? '游客每日免费额度已用完，注册或升级 Pro 继续创作'
+      : 'Daily guest quota used up. Sign up or upgrade to continue.';
+  } else if (reason === 'insufficient') {
+    sub.textContent = t('proSubOutOfCredits');
   } else {
-    sub.textContent = lang === 'zh' ? '解锁更多生成次数，尽情创作' : 'Unlock more generations.';
+    sub.textContent = t('proSub');
   }
   if (!currentUser) {
     btn.style.display  = 'none';
@@ -1423,9 +1610,10 @@ document.getElementById('upgradeModal').addEventListener('click', e => {
 });
 
 async function doCheckout() {
+  if (!currentUser) { closeUpgrade(); openModal('login'); return; }
   const btn = document.getElementById('btnUpgrade');
   btn.disabled = true;
-  btn.textContent = lang === 'zh' ? '跳转中…' : 'Redirecting…';
+  btn.textContent = t('btnUpgradeRedirecting');
   try {
     const r = await fetch('/api/payment/checkout', {
       method: 'POST',
@@ -1436,14 +1624,58 @@ async function doCheckout() {
     if (d.checkout_url) {
       window.location.href = d.checkout_url;
     } else {
-      showToast('支付跳转失败，请稍后再试');
+      showToast(lang === 'zh' ? '支付跳转失败，请稍后再试' : 'Checkout failed, try again');
       btn.disabled = false;
-      btn.textContent = lang === 'zh' ? '立即升级 — $3/月' : 'Upgrade — $3/mo';
+      btn.textContent = t('btnUpgradeNow');
     }
   } catch {
-    showToast('网络错误');
+    showToast(lang === 'zh' ? '网络错误' : 'Network error');
     btn.disabled = false;
-    btn.textContent = lang === 'zh' ? '立即升级 — $3/月' : 'Upgrade — $3/mo';
+    btn.textContent = t('btnUpgradeNow');
+  }
+}
+
+// ── Credits modal ────────────────────────────────────
+function openCredits(reason) {
+  if (!currentUser) { openModal('login'); return; }
+  const balance = currentUser.credits_balance || 0;
+  const hint = document.getElementById('creditsBalanceHint');
+  if (reason === 'insufficient') {
+    hint.innerHTML = (lang === 'zh' ? '⚠ Credits 不足。' : '⚠ Out of credits. ')
+      + t('creditsBalanceHint', { n: balance });
+  } else {
+    hint.innerHTML = t('creditsBalanceHint', { n: balance });
+  }
+  document.getElementById('creditsModal').classList.add('open');
+}
+
+function closeCredits() {
+  document.getElementById('creditsModal').classList.remove('open');
+}
+
+document.getElementById('creditsModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('creditsModal')) closeCredits();
+});
+
+async function doBuyCredits(pack) {
+  if (!currentUser) { closeCredits(); openModal('login'); return; }
+  try {
+    const r = await fetch('/api/credits/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+      credentials: 'include',
+      body: JSON.stringify({ pack }),
+    });
+    const d = await r.json();
+    if (d.checkout_url) {
+      window.location.href = d.checkout_url;
+    } else if (d.error === 'pack_not_configured') {
+      showToast(lang === 'zh' ? '此套餐暂未上架，请稍后再试' : 'Pack not available yet');
+    } else {
+      showToast(lang === 'zh' ? '支付跳转失败' : 'Checkout failed');
+    }
+  } catch {
+    showToast(lang === 'zh' ? '网络错误' : 'Network error');
   }
 }
 
@@ -1554,18 +1786,23 @@ function updateNavUser(user, quota) {
     document.getElementById('navProBadge').style.display    = isPro ? '' : 'none';
     document.getElementById('navUpgradeBtn').style.display  = isPro ? 'none' : '';
 
-    if (quota) {
-      const warn = quota.used >= quota.limit * 0.8;
-      badge.textContent = t('quotaFmt', { used: quota.used, limit: quota.limit });
-      badge.className   = 'quota-badge' + (warn ? ' warn' : '');
-      badge.style.display = '';
-    }
+    // 登录用户：徽章显示 credits 余额，点击打开购买弹窗
+    const credits = Number(user.credits_balance || 0);
+    const low = credits < 5;
+    badge.textContent = t('creditsFmt', { n: credits });
+    badge.className = 'quota-badge credits' + (low ? ' low' : '');
+    badge.title = t(low ? 'creditsLowHint' : 'creditsFmt', { n: credits });
+    badge.onclick = () => openCredits();
+    badge.style.display = '';
   } else {
     navAuthBtn.style.display = '';
     navUser.style.display    = 'none';
+    // 游客：继续显示每日配额
     if (quota) {
       badge.textContent = t('quotaFmt', { used: quota.used, limit: quota.limit });
       badge.className   = 'quota-badge' + (quota.used >= quota.limit ? ' warn' : '');
+      badge.title = '';
+      badge.onclick = null;
       badge.style.display = '';
     }
   }
@@ -1645,7 +1882,7 @@ const _params = new URLSearchParams(location.search);
 if (_params.get('login') === 'ok' || _params.get('payment') === 'success') {
   history.replaceState({}, '', '/');
   if (_params.get('payment') === 'success') {
-    showToast(lang === 'zh' ? '🎉 升级成功！欢迎加入 Pro' : '🎉 Welcome to Pro!');
+    showToast(t('paySuccess'));
   }
 }
 refreshUser();
