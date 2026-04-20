@@ -5,3 +5,4 @@ gunicorn>=21.0
 bcrypt>=4.0
 PyJWT>=2.8
 requests>=2.31
+boto3>=1.34

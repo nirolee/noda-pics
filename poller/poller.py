@@ -51,8 +51,9 @@ COMFY_URL      = "http://127.0.0.1:8188"
 POLL_EVERY     = 5      # 没任务时等待秒数
 IMG_W          = 768
 IMG_H          = 512
-IMAGE_TTL_HOURS = 48   # 图片保留时长（小时）
-CLEANUP_EVERY  = 3600  # 每小时清理一次（秒）
+IMAGE_TTL_HOURS = int(os.environ.get("IMAGE_TTL_HOURS", "720"))   # 输出图保留时长（默认 30 天）
+CLEANUP_EVERY  = int(os.environ.get("CLEANUP_EVERY",  "3600"))    # 每小时清理一次
+# 注意：参考图（refs/ 前缀）不会被此清理逻辑触及，永久保留
 # ──────────────────────────────────────────────────────
 
 logging.basicConfig(

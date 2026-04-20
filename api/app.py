@@ -14,6 +14,11 @@ from flask_cors import CORS
 import pymysql
 import pymysql.cursors
 
+try:
+    import boto3
+except ImportError:
+    boto3 = None
+
 app = Flask(__name__, static_folder="../frontend", static_url_path="")
 app.secret_key = os.getenv("SECRET_KEY", "noda-secret-change-me")
 
@@ -66,6 +71,16 @@ CREDIT_PACKS = {
 
 # Pro 订阅附送 credits：$4.99/月 → 200 credits，累积不清零
 PRO_MONTHLY_CREDITS = int(os.getenv("PRO_MONTHLY_CREDITS", "200"))
+
+# Cloudflare R2（参考图上传用）
+R2_ENDPOINT    = os.getenv("R2_ENDPOINT",   "")
+R2_ACCESS_KEY  = os.getenv("R2_ACCESS_KEY", "")
+R2_SECRET_KEY  = os.getenv("R2_SECRET_KEY", "")
+R2_BUCKET      = os.getenv("R2_BUCKET",     "noda-pics")
+IMG_BASE       = os.getenv("IMG_BASE",      "https://img.noda.pics")
+UPLOAD_MAX_MB  = int(os.getenv("UPLOAD_MAX_MB", "8"))
+# 参考图在 R2 保留时长（小时）；poller 已有 48h 清理，这里只影响新上传的 key 前缀
+REF_TTL_HOURS  = int(os.getenv("REF_TTL_HOURS", "72"))
 
 
 def get_db():
@@ -489,6 +504,60 @@ def submit_job():
     else:
         resp["quota"] = {"used": used + 1, "limit": limit}
     return jsonify(resp), 201
+
+
+@app.post("/api/uploads")
+@require_auth
+def upload_file():
+    """用户上传参考图 → R2 → 返回可访问 URL
+
+    限制：单文件 ≤ UPLOAD_MAX_MB（默认 8MB），仅 image/* mimetype
+    认证：必须登录（避免被滥用消耗带宽）
+    """
+    if boto3 is None:
+        return jsonify({"error": "upload_not_configured", "message": "server missing boto3"}), 503
+    if not R2_ENDPOINT or not R2_ACCESS_KEY or not R2_SECRET_KEY:
+        return jsonify({"error": "upload_not_configured", "message": "R2 not configured"}), 503
+
+    f = request.files.get("image")
+    if not f or not f.filename:
+        return jsonify({"error": "missing_file"}), 400
+    mimetype = (f.mimetype or "").lower()
+    if not mimetype.startswith("image/"):
+        return jsonify({"error": "invalid_mimetype", "got": mimetype}), 400
+
+    # 大小校验
+    f.stream.seek(0, 2)
+    size = f.stream.tell()
+    f.stream.seek(0)
+    if size > UPLOAD_MAX_MB * 1024 * 1024:
+        return jsonify({"error": "file_too_large", "max_mb": UPLOAD_MAX_MB}), 413
+    if size < 200:
+        return jsonify({"error": "file_too_small"}), 400
+
+    # 存到 refs/ 子目录（便于单独清理）
+    ext = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}.get(mimetype, "png")
+    key = f"refs/{request.user['id']}_{uuid.uuid4().hex}.{ext}"
+
+    s3 = boto3.client(
+        "s3",
+        endpoint_url=R2_ENDPOINT,
+        aws_access_key_id=R2_ACCESS_KEY,
+        aws_secret_access_key=R2_SECRET_KEY,
+        region_name="auto",
+    )
+    try:
+        s3.upload_fileobj(f.stream, R2_BUCKET, key,
+                          ExtraArgs={"ContentType": mimetype, "CacheControl": "public, max-age=86400"})
+    except Exception as e:
+        app.logger.error(f"[upload] R2 error: {e}")
+        return jsonify({"error": "upload_failed"}), 500
+
+    return jsonify({
+        "url": f"{IMG_BASE}/{key}",
+        "size": size,
+        "key": key,
+    }), 201
 
 
 @app.post("/api/jobs/batch")
