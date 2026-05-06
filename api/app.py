@@ -764,6 +764,40 @@ def ads_txt():
     return app.send_static_file("ads.txt")
 
 
+@app.get("/robots.txt")
+def robots_txt():
+    body = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /api/\n"
+        "\n"
+        "Sitemap: https://noda.pics/sitemap.xml\n"
+    )
+    return body, 200, {"Content-Type": "text/plain; charset=utf-8"}
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml():
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    urls = [
+        ("https://noda.pics/",           "1.0", "daily"),
+        ("https://noda.pics/about",      "0.6", "monthly"),
+        ("https://noda.pics/contact",    "0.4", "monthly"),
+        ("https://noda.pics/privacy",    "0.3", "yearly"),
+        ("https://noda.pics/terms",      "0.3", "yearly"),
+        ("https://noda.pics/disclaimer", "0.3", "yearly"),
+    ]
+    parts = ['<?xml version="1.0" encoding="UTF-8"?>',
+             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for loc, prio, freq in urls:
+        parts.append(
+            f"<url><loc>{loc}</loc><lastmod>{today}</lastmod>"
+            f"<changefreq>{freq}</changefreq><priority>{prio}</priority></url>"
+        )
+    parts.append("</urlset>")
+    return "\n".join(parts), 200, {"Content-Type": "application/xml; charset=utf-8"}
+
+
 @app.get("/health")
 def health():
     try:
