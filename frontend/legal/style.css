@@ -1,0 +1,84 @@
+/* Shared styles for noda.pics legal pages */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:       #080910;
+  --surface:  #0f111a;
+  --border:   rgba(255,255,255,0.07);
+  --text:     #e2e4ec;
+  --muted:    rgba(226,228,236,0.55);
+  --accent:   #7c6af7;
+  --font-ui:  'Inter', system-ui, sans-serif;
+  --font-head:'Syne', sans-serif;
+  --font-mono:'Space Mono', monospace;
+}
+body {
+  background: var(--bg); color: var(--text); font-family: var(--font-ui);
+  min-height: 100vh; line-height: 1.7;
+}
+.nav {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 18px 32px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(8,9,16,0.85);
+  backdrop-filter: blur(20px);
+}
+.nav .brand {
+  font-family: var(--font-head); font-weight: 800;
+  font-size: 18px; letter-spacing: 0.04em;
+  color: var(--text); text-decoration: none;
+}
+.nav .brand .dot { color: var(--accent); }
+.nav .links { display: flex; gap: 24px; }
+.nav .links a {
+  color: var(--muted); text-decoration: none; font-size: 13px;
+  font-family: var(--font-mono); letter-spacing: 0.06em;
+}
+.nav .links a:hover { color: var(--text); }
+
+main {
+  max-width: 760px; margin: 0 auto; padding: 64px 24px 80px;
+}
+h1 {
+  font-family: var(--font-head);
+  font-size: 38px; font-weight: 800;
+  letter-spacing: -0.01em; margin-bottom: 8px; color: #fff;
+}
+.meta {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--muted); letter-spacing: 0.08em;
+  margin-bottom: 36px;
+}
+h2 {
+  font-family: var(--font-head); font-size: 22px;
+  font-weight: 700; color: #fff;
+  margin-top: 36px; margin-bottom: 12px;
+  letter-spacing: -0.005em;
+}
+p { margin-bottom: 14px; color: var(--text); }
+ul { margin-bottom: 14px; padding-left: 24px; }
+li { margin-bottom: 6px; color: var(--text); }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: #fff; font-weight: 600; }
+.callout {
+  border-left: 2px solid var(--accent);
+  padding: 12px 16px; margin: 20px 0;
+  background: rgba(124,106,247,0.06);
+  font-size: 14px; color: var(--muted);
+}
+
+footer.page-footer {
+  border-top: 1px solid var(--border);
+  padding: 32px 24px;
+  text-align: center;
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--muted); letter-spacing: 0.1em;
+}
+footer.page-footer .links {
+  display: flex; flex-wrap: wrap;
+  justify-content: center; gap: 24px;
+  margin-bottom: 12px;
+}
+footer.page-footer a { color: var(--muted); }
+footer.page-footer a:hover { color: var(--text); }

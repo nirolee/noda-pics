@@ -732,6 +732,38 @@ def index():
     return app.send_static_file("index.html")
 
 
+# Legal pages — required for AdSense, GDPR, basic compliance.
+# Each is a standalone HTML in frontend/legal/ with shared style.css.
+@app.get("/about")
+def about_page():
+    return app.send_static_file("legal/about.html")
+
+
+@app.get("/privacy")
+def privacy_page():
+    return app.send_static_file("legal/privacy.html")
+
+
+@app.get("/terms")
+def terms_page():
+    return app.send_static_file("legal/terms.html")
+
+
+@app.get("/contact")
+def contact_page():
+    return app.send_static_file("legal/contact.html")
+
+
+@app.get("/disclaimer")
+def disclaimer_page():
+    return app.send_static_file("legal/disclaimer.html")
+
+
+@app.get("/ads.txt")
+def ads_txt():
+    return app.send_static_file("ads.txt")
+
+
 @app.get("/health")
 def health():
     try:

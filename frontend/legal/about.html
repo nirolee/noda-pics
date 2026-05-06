@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>关于 NODA.PICS — AI 图像生成站</title>
+<meta name="description" content="NODA.PICS 是一个基于本地 GPU 推理的开源 AI 图像生成网站。了解项目起源、技术栈、定价模式与运营方。">
+<meta name="robots" content="index, follow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Syne:wght@700;800&family=Space+Mono:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/legal/style.css">
+</head>
+<body>
+<nav class="nav">
+  <a href="/" class="brand">NODA<span class="dot">.</span>PICS</a>
+  <div class="links">
+    <a href="/">首页</a>
+    <a href="/about">关于</a>
+    <a href="/contact">联系</a>
+  </div>
+</nav>
+
+<main>
+  <h1>关于 NODA.PICS</h1>
+  <p class="meta">最近更新：2026-05-07</p>
+
+  <p>NODA.PICS 是一个 <strong>基于本地 GPU 推理</strong> 的 AI 图像生成站，由独立开发者 nirolee 在 2025 年搭建。所有图像生成在私人闲置显卡上完成，靠轮询数据库任务运转——没有云算力账单，所以可以做出比同类站更慷慨的免费额度。</p>
+
+  <h2>为什么做这个</h2>
+  <p>2025 年 AI 画图付费工具越来越贵，而很多用户其实只是偶尔玩玩。我自己有一台游戏 PC 大部分时间闲置，于是把它接到 ComfyUI，用 Flask 写了个轮询调度，免费给大家用。</p>
+  <p>2026 年 4 月，整个项目<strong>开源到 GitHub</strong>，任何人都可以拿去复用同样的架构（前端 + Flask + ComfyUI 轮询）。</p>
+
+  <h2>技术栈</h2>
+  <ul>
+    <li>前端：纯 HTML + Vanilla JS（无框架，单文件）</li>
+    <li>后端：Python Flask，部署在 Render 免费 tier</li>
+    <li>数据库：MySQL</li>
+    <li>图像存储：Cloudflare R2，子域 img.noda.pics</li>
+    <li>认证：JWT + Google OAuth + GitHub OAuth，HttpOnly cookie</li>
+    <li>支付：Creem.io 订阅</li>
+    <li>图像生成：家庭 Windows 电脑跑 ComfyUI，轮询数据库任务，零边际算力成本</li>
+  </ul>
+
+  <h2>定价</h2>
+  <ul>
+    <li>游客（按 IP）：3 张/天</li>
+    <li>免费注册：10 张/天</li>
+    <li>Pro：$3/月，100 张/天</li>
+  </ul>
+  <p>定价的逻辑很朴素：覆盖运营开销（域名 + R2 流量 + Render hobby tier 升级）就够了。我们不靠 NODA.PICS 赚钱。</p>
+
+  <h2>运营方</h2>
+  <p>NODA.PICS 由独立开发者 <strong>nirolee</strong> 个人运营。仓库地址：<a href="https://github.com/nirolee/noda-pics" target="_blank" rel="noopener">github.com/nirolee/noda-pics</a>。源码完全公开（MIT License），技术架构拆解见 <a href="https://github.com/nirolee/noda-pics#readme" target="_blank" rel="noopener">README</a>。</p>
+
+  <h2>联系我们</h2>
+  <p>对模型支持、付费功能、合作有想法？欢迎走 <a href="/contact">联系页</a>。</p>
+</main>
+
+<footer class="page-footer">
+  <div class="links">
+    <a href="/">首页</a>
+    <a href="/about">关于</a>
+    <a href="/contact">联系</a>
+    <a href="/privacy">隐私政策</a>
+    <a href="/terms">服务条款</a>
+    <a href="/disclaimer">免责声明</a>
+  </div>
+  <div>© <script>document.write(new Date().getFullYear())</script> NODA.PICS · MADE WITH FLUX.2 KLEIN · LOCAL GPU INFERENCE</div>
+</footer>
+</body>
+</html>

@@ -1,0 +1,4 @@
+# NODA.PICS ads.txt
+# AdSense entries will be added here once approval is granted.
+# Placeholder format (replace pub-XXXXXXXXXXXXXXXX with real publisher ID):
+# google.com, pub-XXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0
